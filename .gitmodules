@@ -2,3 +2,6 @@
 	path = BakeBit
 	url = https://github.com/friendlyarm/BakeBit
 	branch = master
+[submodule "src/u8g2"]
+	path = src/u8g2
+	url = https://github.com/olikraus/u8g2.git

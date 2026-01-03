@@ -3,6 +3,11 @@
 # =====================
 NanoHatOLED
 
+# Build artifacts
+*.o
+src/nanohat-oled
+src/oled_demo
+
 # Vim backup
 README.md~
 # Vim swap
