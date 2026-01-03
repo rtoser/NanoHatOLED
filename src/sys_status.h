@@ -7,6 +7,7 @@
 // Service status structure
 typedef struct {
     char name[16];          // Service name
+    char ubus_name[16];     // procd/ubus service name
     bool running;           // Service running status
 } service_status_t;
 
@@ -30,8 +31,15 @@ typedef struct {
     int service_count;
 } sys_status_t;
 
-// Get current system status
-void sys_status_update(sys_status_t *status);
+// Init/cleanup
+void sys_status_init(void);
+void sys_status_cleanup(void);
+
+// Get current system status (without service list)
+void sys_status_update_basic(sys_status_t *status);
+
+// Update service list and running state
+void sys_status_update_services(sys_status_t *status);
 
 // Format uptime as string (e.g., "2d 5h 30m")
 void sys_status_format_uptime(uint32_t uptime, char *buf, int buflen);

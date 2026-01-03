@@ -35,15 +35,19 @@ uint8_t u8g2_gpio_and_delay_linux(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, vo
 }
 
 uint8_t u8x8_byte_linux_i2c(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_ptr) {
-    static uint8_t buffer[32]; 
-    static uint8_t buf_idx;
+    // SSD1306 can receive up to 128 bytes per page + control byte
+    // u8g2 typically sends in chunks, but we need enough buffer
+    static uint8_t buffer[256];
+    static uint16_t buf_idx;
     uint8_t *data;
 
     switch(msg) {
         case U8X8_MSG_BYTE_SEND:
             data = (uint8_t *)arg_ptr;
             while(arg_int > 0) {
-                buffer[buf_idx++] = *data;
+                if (buf_idx < sizeof(buffer)) {
+                    buffer[buf_idx++] = *data;
+                }
                 data++;
                 arg_int--;
             }

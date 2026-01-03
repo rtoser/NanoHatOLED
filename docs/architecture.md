@@ -35,13 +35,16 @@ NanoHat OLED 是一个轻量级的嵌入式显示应用，专为 NanoPi NEO2 Plu
 - 运行主事件循环
 - 页面切换逻辑
 - 渲染四个显示页面
+- 服务页菜单控制（K2 长按进入/退出，K1/K3 选择，K2 短按启停，超时退出）
+- 通过 libubus/procd 执行服务启停
+- 非菜单页长按抖动提示
 
 **页面结构**：
 | 页面 | 内容 |
 |------|------|
-| Status | CPU 使用率/温度、内存使用率、运行时间 |
+| Status | 主机名、CPU 使用率/温度、内存使用率、运行时间 |
 | Network | IP 地址、实时上下行网速 |
-| Services | xray/dropbear/dockerd 服务状态 |
+| Services | xray_core/dropbear/dockerd 服务状态（最多 3 项） |
 | System | 内存详细信息（总量/可用/空闲） |
 
 **主循环逻辑**：
@@ -49,7 +52,14 @@ NanoHat OLED 是一个轻量级的嵌入式显示应用，专为 NanoPi NEO2 Plu
 while (running) {
     // 每秒更新系统状态并重绘
     if (now != last_update) {
-        sys_status_update(&sys_status);
+        sys_status_update_basic(&sys_status);
+        draw_current_page();
+    }
+
+    // 服务页状态按 3-5 秒间隔刷新
+    if (current_page == PAGE_SERVICES &&
+        now - last_service_refresh >= 5) {
+        sys_status_update_services(&sys_status);
         draw_current_page();
     }
 
@@ -67,19 +77,19 @@ while (running) {
 - 配置 GPIO 引脚（GPIO 0/2/3）
 - 设置边沿触发中断
 - 使用 `poll()` 等待中断事件
-- 处理按键防抖
+- 检测按键按下与长按事件
 
 **设计要点**：
 - 使用 Linux GPIO sysfs 接口
-- 边沿触发（falling edge）而非轮询
+- 双边沿触发（press/release）
 - poll() 阻塞等待，CPU 占用极低
-- 50ms 防抖延时
+- 长按阈值 600ms（短按在松开时上报）
 
 **按键映射**：
 | 按键 | GPIO | 功能 |
 |------|------|------|
 | K1 | GPIO 0 | 上一页 / 唤醒屏幕 |
-| K2 | GPIO 2 | 开关屏幕 |
+| K2 | GPIO 2 | 短按开关屏幕 / 服务页长按进入菜单 |
 | K3 | GPIO 3 | 下一页 / 唤醒屏幕 |
 
 ### 3. sys_status.c - 系统状态采集
@@ -89,11 +99,13 @@ while (running) {
 - 读取 CPU 温度（/sys/class/thermal）
 - 读取内存信息（/proc/meminfo）
 - 读取网络流量（/proc/net/dev）
-- 检测服务运行状态（/proc/*/comm）
+- 获取主机名与 IP 地址（优先 br-lan/eth0/wlan0）
+- 通过 libubus/procd 检测服务运行状态
 
 **性能优化**：
 - 直接读取 /proc 文件系统，避免 fork/exec
-- 服务状态检测结果缓存 5 秒
+- 服务状态通过 libubus/procd 获取
+- 服务状态仅在启动、进入/退出服务页以及服务页停留时按 3-5 秒间隔刷新
 - 网速计算基于时间差和字节差
 
 **数据结构**：
@@ -112,7 +124,19 @@ typedef struct {
 } sys_status_t;
 ```
 
-### 4. u8g2_port_linux.c - 显示驱动移植层
+### 4. ubus_service.c - 服务控制与状态查询
+
+**职责**：
+- 建立并维护 libubus 连接
+- 查询 procd 服务状态（`service list`）
+- 触发服务启停（`service start/stop`）
+
+**设计要点**：
+- 使用同步 `ubus_invoke`
+- 断线时按需重连
+- 服务页刷新节流以降低调用频率
+
+### 5. u8g2_port_linux.c - 显示驱动移植层
 
 **职责**：
 - 实现 u8g2 库的 Linux I2C 后端
@@ -131,7 +155,7 @@ typedef struct {
 系统状态采集                    按键输入
      │                            │
      ▼                            ▼
-sys_status_update()      gpio_button_wait()
+sys_status_update_basic()      gpio_button_wait()
      │                            │
      └──────────┬─────────────────┘
                 │
@@ -170,7 +194,7 @@ sys_status_update()      gpio_button_wait()
 **理由**：
 - 按键使用中断，响应迅速且 CPU 友好
 - 系统状态使用定时轮询（1 秒间隔）
-- 服务状态使用缓存（5 秒间隔）
+- 服务状态仅在启动、进入/退出服务页以及服务页停留时按 3-5 秒间隔刷新
 
 ### 3. 静态链接 vs 动态链接
 
@@ -181,14 +205,14 @@ sys_status_update()      gpio_button_wait()
 - 单一可执行文件，无依赖问题
 - musl 体积小，适合嵌入式
 
-### 4. 进程检测方式
+### 4. 服务状态获取方式
 
-**选择**：直接读取 /proc/*/comm
+**选择**：通过 libubus/procd 查询
 
 **理由**：
-- 避免 fork/exec 开销
-- BusyBox pgrep/pidof 行为不一致
-- 纯用户态实现，更可控
+- 状态与控制同源，避免服务名/进程名不一致
+- 不依赖 /proc 扫描
+- 与 OpenWrt 服务管理机制一致
 
 ## 资源占用
 
@@ -205,11 +229,17 @@ sys_status_update()      gpio_button_wait()
 main.c
   ├── gpio_button.h
   ├── sys_status.h
+  ├── ubus_service.h
   └── u8g2_port_linux.h
         └── u8g2.h (u8g2 库)
 
 sys_status.c
-  └── 系统头文件 (stdio, dirent, ifaddrs, ...)
+  ├── ubus_service.h
+  └── 系统头文件 (stdio, ifaddrs, ...)
+
+ubus_service.c
+  ├── libubus.h
+  └── libubox/blobmsg.h
 
 gpio_button.c
   └── poll.h, fcntl.h
@@ -223,12 +253,18 @@ u8g2_port_linux.c
 ### 添加新页面
 1. 在 `page_t` 枚举中添加新页面
 2. 实现 `draw_page_xxx()` 函数
-3. 在 `draw_current_page()` 的 switch 中添加 case
+3. 在 `render_page()` 的 switch 中添加 case
 
 ### 添加新服务监控
 修改 `sys_status.c` 中的 `services[]` 数组：
 ```c
-static const char *services[] = {"xray", "dropbear", "dockerd", "新服务", NULL};
+static const service_entry_t services[] = {
+    {"xray_core", "xray_core"},
+    {"dropbear", "dropbear"},
+    {"dockerd", "dockerd"},
+    {"新服务", "服务名"},
+    {NULL, NULL}
+};
 ```
 
 ### 更换显示屏

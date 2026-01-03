@@ -1,3 +1,13 @@
+/*
+ * GPIO Button Driver using sysfs interface
+ *
+ * Uses both-edge detection for reliable button handling:
+ * - Short press: reported on release (if held < LONG_PRESS_MS)
+ * - Long press: reported while held (after LONG_PRESS_MS)
+ *
+ * FIX: Event-driven sysfs handling and active-level auto-detect
+ */
+
 #include "gpio_button.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,13 +19,17 @@
 #include <errno.h>
 
 #define GPIO_PATH "/sys/class/gpio"
+#define NUM_BUTTONS 3
 #define LONG_PRESS_MS 600
+#define DEBOUNCE_MS 30
 
-static int btn_fds[3] = {-1, -1, -1};
-static int btn_gpios[3] = {BTN_K1_GPIO, BTN_K2_GPIO, BTN_K3_GPIO};
-static uint64_t btn_press_time[3] = {0, 0, 0};
-static bool btn_pressed[3] = {false, false, false};
-static bool btn_long_reported[3] = {false, false, false};
+static int btn_fds[NUM_BUTTONS] = {-1, -1, -1};
+static const int btn_gpios[NUM_BUTTONS] = {BTN_K1_GPIO, BTN_K2_GPIO, BTN_K3_GPIO};
+static uint64_t btn_press_time[NUM_BUTTONS] = {0, 0, 0};
+static bool btn_pressed[NUM_BUTTONS] = {false, false, false};
+static bool btn_long_reported[NUM_BUTTONS] = {false, false, false};
+static uint64_t btn_last_edge_ms[NUM_BUTTONS] = {0, 0, 0};
+static char pressed_value = '0';
 
 static uint64_t get_time_ms(void) {
     struct timespec ts;
@@ -105,8 +119,35 @@ static void gpio_unexport(int gpio) {
     close(fd);
 }
 
+static char gpio_read_value(int idx) {
+    if (idx < 0 || idx >= NUM_BUTTONS || btn_fds[idx] < 0) {
+        return '1';
+    }
+    char val = '1';
+    lseek(btn_fds[idx], 0, SEEK_SET);
+    read(btn_fds[idx], &val, 1);
+    return val;
+}
+
+static char detect_pressed_value(void) {
+    int zeros = 0;
+    int ones = 0;
+
+    for (int i = 0; i < NUM_BUTTONS; i++) {
+        char val = gpio_read_value(i);
+        if (val == '0') {
+            zeros++;
+        } else {
+            ones++;
+        }
+    }
+
+    // Majority low implies idle-low wiring, so pressed reads high.
+    return (zeros >= ones) ? '1' : '0';
+}
+
 int gpio_button_init(void) {
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < NUM_BUTTONS; i++) {
         if (gpio_export(btn_gpios[i]) < 0) {
             fprintf(stderr, "Failed to export GPIO %d\n", btn_gpios[i]);
             gpio_button_cleanup();
@@ -119,8 +160,8 @@ int gpio_button_init(void) {
             return -1;
         }
 
-        // Set falling edge only (button press, active low)
-        if (gpio_set_edge(btn_gpios[i], "falling") < 0) {
+        // Use both edges: detect press (falling) and release (rising)
+        if (gpio_set_edge(btn_gpios[i], "both") < 0) {
             fprintf(stderr, "Failed to set GPIO %d edge\n", btn_gpios[i]);
             gpio_button_cleanup();
             return -1;
@@ -133,93 +174,117 @@ int gpio_button_init(void) {
             return -1;
         }
 
-        // Clear any pending interrupt
-        char val;
-        lseek(btn_fds[i], 0, SEEK_SET);
-        read(btn_fds[i], &val, 1);
+    }
+
+    pressed_value = detect_pressed_value();
+    uint64_t now = get_time_ms();
+    for (int i = 0; i < NUM_BUTTONS; i++) {
+        char val = gpio_read_value(i);
+        btn_pressed[i] = (val == pressed_value);
+        btn_press_time[i] = btn_pressed[i] ? now : 0;
+        btn_long_reported[i] = false;
+        btn_last_edge_ms[i] = 0;
     }
 
     return 0;
 }
 
 void gpio_button_cleanup(void) {
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < NUM_BUTTONS; i++) {
         if (btn_fds[i] >= 0) {
             close(btn_fds[i]);
             btn_fds[i] = -1;
         }
         gpio_unexport(btn_gpios[i]);
+        btn_pressed[i] = false;
+        btn_long_reported[i] = false;
+        btn_press_time[i] = 0;
+        btn_last_edge_ms[i] = 0;
     }
 }
 
-bool gpio_button_read(int gpio) {
-    int idx = -1;
-    for (int i = 0; i < 3; i++) {
-        if (btn_gpios[i] == gpio) {
-            idx = i;
-            break;
+button_event_t gpio_button_wait(int timeout_ms) {
+    struct pollfd pfd[NUM_BUTTONS];
+    button_event_t result = BTN_NONE;
+    uint64_t now = get_time_ms();
+
+    // Calculate effective timeout for long press detection
+    int effective_timeout = timeout_ms;
+    for (int i = 0; i < NUM_BUTTONS; i++) {
+        if (btn_pressed[i] && !btn_long_reported[i]) {
+            uint64_t elapsed = now - btn_press_time[i];
+            if (elapsed < LONG_PRESS_MS) {
+                int remaining = LONG_PRESS_MS - elapsed;
+                if (effective_timeout < 0 || remaining < effective_timeout) {
+                    effective_timeout = remaining;
+                }
+            }
         }
     }
 
-    if (idx < 0 || btn_fds[idx] < 0) return false;
-
-    char val;
-    lseek(btn_fds[idx], 0, SEEK_SET);
-    if (read(btn_fds[idx], &val, 1) != 1) return false;
-
-    // Buttons are active low
-    return val == '0';
-}
-
-// Wait for button event with interrupt (poll), timeout in ms
-// Using falling edge only - each interrupt = one button press
-button_event_t gpio_button_wait(int timeout_ms) {
-    struct pollfd pfd[3];
-
-    for (int i = 0; i < 3; i++) {
+    // Setup poll
+    for (int i = 0; i < NUM_BUTTONS; i++) {
         pfd[i].fd = btn_fds[i];
         pfd[i].events = POLLPRI | POLLERR;
     }
 
-    int ret = poll(pfd, 3, timeout_ms);
-    uint64_t now = get_time_ms();
+    int ret = poll(pfd, NUM_BUTTONS, effective_timeout);
+    if (ret < 0) {
+        if (errno != EINTR) {
+            return BTN_NONE;
+        }
+        ret = 0;
+    }
+    now = get_time_ms();
 
-    // Check which button triggered
-    for (int i = 0; i < 3; i++) {
-        // Always read to clear interrupt
-        char val;
-        lseek(btn_fds[i], 0, SEEK_SET);
-        read(btn_fds[i], &val, 1);
+    // Process buttons with events only to avoid clearing pending edges
+    for (int i = 0; i < NUM_BUTTONS; i++) {
+        bool had_event = (ret > 0) && (pfd[i].revents & (POLLPRI | POLLERR));
+        if (!had_event) {
+            continue;
+        }
 
-        if (ret > 0 && (pfd[i].revents & POLLPRI)) {
-            // Falling edge interrupt = button pressed
-            // Check for long press tracking
+        char val = gpio_read_value(i);
+        bool currently_pressed = (val == pressed_value);
+
+        if (btn_last_edge_ms[i] != 0 && now - btn_last_edge_ms[i] < DEBOUNCE_MS) {
+            continue;
+        }
+        btn_last_edge_ms[i] = now;
+
+        if (currently_pressed) {
             if (!btn_pressed[i]) {
                 btn_pressed[i] = true;
                 btn_press_time[i] = now;
                 btn_long_reported[i] = false;
-                return (button_event_t)(BTN_K1_PRESS + i);
             }
-        }
-
-        // Update pressed state based on current value
-        bool currently_pressed = (val == '0');
-        if (!currently_pressed) {
-            btn_pressed[i] = false;
-        }
-
-        // Check for long press (button still held)
-        if (btn_pressed[i] && !btn_long_reported[i]) {
-            if (now - btn_press_time[i] >= LONG_PRESS_MS) {
-                btn_long_reported[i] = true;
-                return (button_event_t)(BTN_K1_LONG_PRESS + i);
+        } else {
+            if (btn_pressed[i]) {
+                btn_pressed[i] = false;
+                if (!btn_long_reported[i] && result == BTN_NONE) {
+                    result = (button_event_t)(BTN_K1_PRESS + i);
+                }
+            } else {
+                if (result == BTN_NONE) {
+                    result = (button_event_t)(BTN_K1_PRESS + i);
+                }
             }
         }
     }
 
-    return BTN_NONE;
+    // Check for long press (button still held past threshold)
+    for (int i = 0; i < NUM_BUTTONS; i++) {
+        if (btn_pressed[i] && !btn_long_reported[i]) {
+            if (now - btn_press_time[i] >= LONG_PRESS_MS) {
+                btn_long_reported[i] = true;
+                result = (button_event_t)(BTN_K1_LONG_PRESS + i);
+            }
+        }
+    }
+
+    return result;
 }
 
 button_event_t gpio_button_poll(void) {
-    return gpio_button_wait(0);  // Non-blocking
+    return gpio_button_wait(0);
 }

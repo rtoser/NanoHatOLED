@@ -8,9 +8,14 @@
 #include "u8g2_port_linux.h"
 #include "gpio_button.h"
 #include "sys_status.h"
+#include "ubus_service.h"
 
 #define APP_NAME "nanohat-oled"
 #define VERSION "1.0.0"
+#define MENU_TIMEOUT_MS 10000
+#define SHAKE_TICKS 6
+#define SHAKE_OFFSET 2
+#define SERVICE_REFRESH_INTERVAL 5
 
 // Display pages
 typedef enum {
@@ -26,6 +31,22 @@ static u8g2_t u8g2;
 static page_t current_page = PAGE_NETWORK;
 static sys_status_t sys_status;
 static int display_on = 1;
+static int menu_active = 0;
+static int menu_selected = 0;
+static uint64_t menu_last_input_ms = 0;
+static int shake_ticks = 0;
+static time_t last_service_refresh = 0;
+
+static uint64_t get_time_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
+// Animation settings (optimized for 800KHz I2C)
+#define TRANSITION_FRAMES 8
+#define TRANSITION_DELAY_US 0  // No artificial delay, pure I2C speed
+static int g_x_offset = 0;  // Global x offset for animation
 
 static void signal_handler(int sig) {
     syslog(LOG_INFO, "Received signal %d, shutting down...", sig);
@@ -43,71 +64,100 @@ static void setup_signals(void) {
     sigaction(SIGHUP, &sa, NULL);
 }
 
-static void draw_header(const char *title) {
+// Draw string with global x offset (for animation)
+static inline void draw_str(int x, int y, const char *str) {
+    u8g2_DrawStr(&u8g2, x + g_x_offset, y, str);
+}
+
+static inline void draw_hline(int x, int y, int w) {
+    u8g2_DrawHLine(&u8g2, x + g_x_offset, y, w);
+}
+
+static inline void draw_box(int x, int y, int w, int h) {
+    u8g2_DrawBox(&u8g2, x + g_x_offset, y, w, h);
+}
+
+static void draw_header(const char *title, int centered, int show_indicator) {
     u8g2_SetFont(&u8g2, u8g2_font_8x13B_tf);  // Bold title
-    u8g2_DrawStr(&u8g2, 0, 11, title);
+    int x = 0;
+    if (centered) {
+        int w = u8g2_GetStrWidth(&u8g2, title);
+        x = (128 - w) / 2;
+        if (x < 0) x = 0;
+    }
+    draw_str(x, 11, title);
 
-    // Page indicator in top right
-    char indicator[8];
-    snprintf(indicator, sizeof(indicator), "%d/%d", current_page + 1, PAGE_COUNT);
-    u8g2_SetFont(&u8g2, u8g2_font_5x7_tf);
-    int w = u8g2_GetStrWidth(&u8g2, indicator);
-    u8g2_DrawStr(&u8g2, 128 - w, 11, indicator);
+    if (show_indicator) {
+        // Page indicator in top right
+        char indicator[8];
+        snprintf(indicator, sizeof(indicator), "%d/%d", current_page + 1, PAGE_COUNT);
+        u8g2_SetFont(&u8g2, u8g2_font_5x7_tf);
+        int w = u8g2_GetStrWidth(&u8g2, indicator);
+        draw_str(128 - w, 11, indicator);
+    }
 
-    u8g2_DrawHLine(&u8g2, 0, 13, 128);
+    draw_hline(0, 13, 128);
 }
 
 static void draw_page_status(void) {
     char buf[32];
 
-    draw_header(sys_status.hostname);
+    draw_header(sys_status.hostname, 0, 1);
 
-    u8g2_SetFont(&u8g2, u8g2_font_7x13_tf);
+    u8g2_SetFont(&u8g2, u8g2_font_7x13_te);  // _te includes Latin-1 extended chars
 
-    // CPU
-    snprintf(buf, sizeof(buf), "CPU: %.1f%% %.0fC", sys_status.cpu_usage, sys_status.cpu_temp);
-    u8g2_DrawStr(&u8g2, 0, 28, buf);
+    // CPU (degree symbol U+00B0 = 0xB0 in Latin-1)
+    snprintf(buf, sizeof(buf), "CPU: %.1f%% %.0f\xb0""C", sys_status.cpu_usage, sys_status.cpu_temp);
+    draw_str(0, 28, buf);
 
-    // Memory
-    float mem_used_pct = 100.0f * (1.0f - (float)sys_status.mem_available / sys_status.mem_total);
+    // Memory (guard against division by zero)
+    float mem_used_pct = 0.0f;
+    if (sys_status.mem_total > 0) {
+        mem_used_pct = 100.0f * (1.0f - (float)sys_status.mem_available / sys_status.mem_total);
+    }
     snprintf(buf, sizeof(buf), "MEM: %.1f%%", mem_used_pct);
-    u8g2_DrawStr(&u8g2, 0, 43, buf);
+    draw_str(0, 43, buf);
 
     // Uptime
     char uptime_str[16];
     sys_status_format_uptime(sys_status.uptime, uptime_str, sizeof(uptime_str));
     snprintf(buf, sizeof(buf), "UPT: %s", uptime_str);
-    u8g2_DrawStr(&u8g2, 0, 58, buf);
+    draw_str(0, 58, buf);
 }
 
 static void draw_page_network(void) {
     char buf[32];
 
-    draw_header("Network");
+    draw_header("Network", 0, 1);
 
     u8g2_SetFont(&u8g2, u8g2_font_7x13_tf);
 
     // IP
     snprintf(buf, sizeof(buf), "IP: %s", sys_status.ip_addr);
-    u8g2_DrawStr(&u8g2, 0, 28, buf);
+    draw_str(0, 28, buf);
 
     // RX speed
     char rx_speed[12];
     sys_status_format_bytes(sys_status.rx_speed, rx_speed, sizeof(rx_speed));
     snprintf(buf, sizeof(buf), "RX: %s/s", rx_speed);
-    u8g2_DrawStr(&u8g2, 0, 43, buf);
+    draw_str(0, 43, buf);
 
     // TX speed
     char tx_speed[12];
     sys_status_format_bytes(sys_status.tx_speed, tx_speed, sizeof(tx_speed));
     snprintf(buf, sizeof(buf), "TX: %s/s", tx_speed);
-    u8g2_DrawStr(&u8g2, 0, 58, buf);
+    draw_str(0, 58, buf);
 }
 
 static void draw_page_services(void) {
-    draw_header("Services");
+    draw_header("Services", 0, 1);
 
     u8g2_SetFont(&u8g2, u8g2_font_7x13_tf);
+
+    if (sys_status.service_count <= 0) {
+        draw_str(0, 40, "No services");
+        return;
+    }
 
     int y = 28;
     for (int i = 0; i < sys_status.service_count && i < 3; i++) {
@@ -115,7 +165,38 @@ static void draw_page_services(void) {
         snprintf(buf, sizeof(buf), "%s: %s",
                  sys_status.services[i].name,
                  sys_status.services[i].running ? "ON" : "OFF");
-        u8g2_DrawStr(&u8g2, 0, y, buf);
+        draw_str(0, y, buf);
+        y += 15;
+    }
+}
+
+static void draw_page_services_menu(void) {
+    draw_header("Services", 1, 0);
+
+    u8g2_SetFont(&u8g2, u8g2_font_7x13_tf);
+
+    if (sys_status.service_count <= 0) {
+        draw_str(0, 40, "No services");
+        return;
+    }
+    if (menu_selected >= sys_status.service_count) {
+        menu_selected = 0;
+    }
+
+    int y = 28;
+    for (int i = 0; i < sys_status.service_count && i < 3; i++) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%s: %s",
+                 sys_status.services[i].name,
+                 sys_status.services[i].running ? "ON" : "OFF");
+        if (i == menu_selected) {
+            draw_box(0, y - 11, 128, 13);
+            u8g2_SetDrawColor(&u8g2, 0);
+            draw_str(0, y, buf);
+            u8g2_SetDrawColor(&u8g2, 1);
+        } else {
+            draw_str(0, y, buf);
+        }
         y += 15;
     }
 }
@@ -123,27 +204,24 @@ static void draw_page_services(void) {
 static void draw_page_system(void) {
     char buf[32];
 
-    draw_header("System");
+    draw_header("System", 0, 1);
 
     u8g2_SetFont(&u8g2, u8g2_font_7x13_tf);
 
     // Memory details
     snprintf(buf, sizeof(buf), "Total: %lu MB", sys_status.mem_total / 1024);
-    u8g2_DrawStr(&u8g2, 0, 28, buf);
+    draw_str(0, 28, buf);
 
     snprintf(buf, sizeof(buf), "Avail: %lu MB", sys_status.mem_available / 1024);
-    u8g2_DrawStr(&u8g2, 0, 43, buf);
+    draw_str(0, 43, buf);
 
     snprintf(buf, sizeof(buf), "Free:  %lu MB", sys_status.mem_free / 1024);
-    u8g2_DrawStr(&u8g2, 0, 58, buf);
+    draw_str(0, 58, buf);
 }
 
-static void draw_current_page(void) {
-    if (!display_on) return;
-
-    u8g2_ClearBuffer(&u8g2);
-
-    switch (current_page) {
+// Render a specific page (used for both normal display and animation)
+static void render_page(page_t page) {
+    switch (page) {
         case PAGE_STATUS:
             draw_page_status();
             break;
@@ -151,7 +229,11 @@ static void draw_current_page(void) {
             draw_page_network();
             break;
         case PAGE_SERVICES:
-            draw_page_services();
+            if (menu_active) {
+                draw_page_services_menu();
+            } else {
+                draw_page_services();
+            }
             break;
         case PAGE_SYSTEM:
             draw_page_system();
@@ -159,8 +241,122 @@ static void draw_current_page(void) {
         default:
             break;
     }
+}
 
+static int get_shake_offset(void) {
+    if (shake_ticks <= 0) return 0;
+    int offset = (shake_ticks % 2 == 0) ? -SHAKE_OFFSET : SHAKE_OFFSET;
+    shake_ticks--;
+    return offset;
+}
+
+static void trigger_shake(void) {
+    shake_ticks = SHAKE_TICKS;
+}
+
+static void draw_current_page(void) {
+    if (!display_on) return;
+
+    u8g2_ClearBuffer(&u8g2);
+    g_x_offset = get_shake_offset();
+    render_page(current_page);
     u8g2_SendBuffer(&u8g2);
+    g_x_offset = 0;
+}
+
+// Pre-render a page to a buffer (1024 bytes for 128x64 monochrome)
+static void render_page_to_buffer(page_t page, uint8_t *buf) {
+    // Save original buffer pointer
+    uint8_t *original_buf = u8g2_GetBufferPtr(&u8g2);
+
+    // Temporarily point u8g2 to our buffer
+    // Note: u8g2 buffer structure allows this trick
+    u8g2.tile_buf_ptr = buf;
+
+    u8g2_ClearBuffer(&u8g2);
+    g_x_offset = 0;
+    render_page(page);
+
+    // Restore original buffer
+    u8g2.tile_buf_ptr = original_buf;
+}
+
+// Slide transition animation using dual-buffer composition
+// direction: -1 = slide right (K1, prev page), +1 = slide left (K3, next page)
+static void transition_to_page(page_t from, page_t to, int direction) {
+    if (!display_on) return;
+
+    // Pre-render both pages to separate buffers
+    static uint8_t buf_from[1024];
+    static uint8_t buf_to[1024];
+
+    render_page_to_buffer(from, buf_from);
+    render_page_to_buffer(to, buf_to);
+
+    uint8_t *display_buf = u8g2_GetBufferPtr(&u8g2);
+
+    // SSD1306 buffer layout: 8 pages × 128 columns = 1024 bytes
+    // Each page is 128 bytes (one byte per column, 8 vertical pixels)
+    // Step by 8 pixels (8 bytes per page) for efficient memcpy
+
+    int step = 128 / TRANSITION_FRAMES;  // 16 pixels per frame
+
+    for (int frame = 1; frame <= TRANSITION_FRAMES; frame++) {
+        int offset = frame * step;  // 16, 32, 48, ... 128
+
+        // Composite the two buffers
+        // For each of the 8 pages (each 128 bytes)
+        for (int page = 0; page < 8; page++) {
+            int page_offset = page * 128;
+
+            if (direction > 0) {
+                // Slide left: from page moves left, to page enters from right
+                // Copy (128 - offset) bytes from buf_from starting at offset
+                // Copy offset bytes from buf_to starting at 0
+                memcpy(display_buf + page_offset,
+                       buf_from + page_offset + offset,
+                       128 - offset);
+                memcpy(display_buf + page_offset + (128 - offset),
+                       buf_to + page_offset,
+                       offset);
+            } else {
+                // Slide right: from page moves right, to page enters from left
+                // Copy offset bytes from buf_to starting at (128 - offset)
+                // Copy (128 - offset) bytes from buf_from starting at 0
+                memcpy(display_buf + page_offset,
+                       buf_to + page_offset + (128 - offset),
+                       offset);
+                memcpy(display_buf + page_offset + offset,
+                       buf_from + page_offset,
+                       128 - offset);
+            }
+        }
+
+        u8g2_SendBuffer(&u8g2);
+        usleep(TRANSITION_DELAY_US);
+    }
+
+    g_x_offset = 0;
+}
+
+static int page_supports_menu(page_t page) {
+    return page == PAGE_SERVICES;
+}
+
+static void menu_touch(void) {
+    menu_last_input_ms = get_time_ms();
+}
+
+static void menu_enter(void) {
+    menu_active = 1;
+    menu_selected = 0;
+    menu_touch();
+    sys_status_update_services(&sys_status);
+    last_service_refresh = time(NULL);
+}
+
+static void menu_exit(void) {
+    menu_active = 0;
 }
 
 static void toggle_display(void) {
@@ -173,38 +369,99 @@ static void toggle_display(void) {
 }
 
 static void handle_button(button_event_t event) {
-    switch (event) {
-        case BTN_K1_PRESS:  // Previous page
-            if (!display_on) {
-                toggle_display();
-                return;
-            }
-            if (current_page > 0) {
-                current_page--;
-            } else {
-                current_page = PAGE_COUNT - 1;
-            }
-            syslog(LOG_DEBUG, "Button K1: page %d", current_page);
-            break;
+    if (!display_on) {
+        toggle_display();
+        return;
+    }
 
-        case BTN_K3_PRESS:  // Next page
-            if (!display_on) {
-                toggle_display();
+    if (menu_active) {
+        int count = sys_status.service_count;
+        if (count > 0 && menu_selected >= count) {
+            menu_selected = 0;
+        }
+        switch (event) {
+            case BTN_K1_PRESS:
+                if (count > 0) {
+                    menu_selected = (menu_selected + count - 1) % count;
+                    menu_touch();
+                    draw_current_page();
+                }
                 return;
+            case BTN_K3_PRESS:
+                if (count > 0) {
+                    menu_selected = (menu_selected + 1) % count;
+                    menu_touch();
+                    draw_current_page();
+                }
+                return;
+            case BTN_K2_PRESS:
+                if (count > 0) {
+                    service_status_t *svc = &sys_status.services[menu_selected];
+                    const char *action = svc->running ? "stop" : "start";
+                    syslog(LOG_INFO, "Service %s %s", svc->ubus_name, action);
+                    if (ubus_service_action(svc->ubus_name, action) == 0) {
+                        // Optimistic update: flip state immediately for responsive UI
+                        svc->running = !svc->running;
+                    } else {
+                        syslog(LOG_ERR, "Service %s %s failed", svc->ubus_name, action);
+                    }
+                    menu_touch();
+                    last_service_refresh = time(NULL);
+                    draw_current_page();
+                }
+                return;
+            case BTN_K2_LONG_PRESS:
+                menu_exit();
+                draw_current_page();
+                return;
+            default:
+                return;
+        }
+    }
+
+    page_t old_page = current_page;
+    page_t new_page;
+
+    switch (event) {
+        case BTN_K1_PRESS:  // Previous page (slide right)
+            new_page = (current_page > 0) ? current_page - 1 : PAGE_COUNT - 1;
+            syslog(LOG_DEBUG, "Button K1: page %d -> %d", current_page, new_page);
+            current_page = new_page;
+            if (current_page == PAGE_SERVICES || old_page == PAGE_SERVICES) {
+                sys_status_update_services(&sys_status);
+                last_service_refresh = time(NULL);
             }
-            current_page = (current_page + 1) % PAGE_COUNT;
-            syslog(LOG_DEBUG, "Button K3: page %d", current_page);
-            break;
+            transition_to_page(old_page, new_page, -1);  // Slide right
+            return;
+
+        case BTN_K3_PRESS:  // Next page (slide left)
+            new_page = (current_page + 1) % PAGE_COUNT;
+            syslog(LOG_DEBUG, "Button K3: page %d -> %d", current_page, new_page);
+            current_page = new_page;
+            if (current_page == PAGE_SERVICES || old_page == PAGE_SERVICES) {
+                sys_status_update_services(&sys_status);
+                last_service_refresh = time(NULL);
+            }
+            transition_to_page(old_page, new_page, +1);  // Slide left
+            return;
 
         case BTN_K2_PRESS:  // Toggle display
             toggle_display();
             return;
 
+        case BTN_K2_LONG_PRESS:
+            if (page_supports_menu(current_page)) {
+                menu_enter();
+                draw_current_page();
+            } else {
+                trigger_shake();
+                draw_current_page();
+            }
+            return;
+
         default:
             return;
     }
-
-    draw_current_page();
 }
 
 static int display_init(void) {
@@ -277,24 +534,50 @@ int main(int argc, char *argv[]) {
         syslog(LOG_INFO, "GPIO buttons initialized");
     }
 
+    // Initialize system status module
+    sys_status_init();
+    if (ubus_service_init() < 0) {
+        syslog(LOG_WARNING, "ubus init failed, service status may be unavailable");
+    }
+
     // Initialize display
     if (display_init() < 0) {
         syslog(LOG_ERR, "Display init failed");
+        sys_status_cleanup();
         gpio_button_cleanup();
         closelog();
         return 1;
     }
     syslog(LOG_INFO, "Display initialized");
 
+    sys_status_update_basic(&sys_status);
+    sys_status_update_services(&sys_status);
+    last_service_refresh = time(NULL);
+    draw_current_page();
+
     // Main loop - use interrupt-driven button wait
     time_t last_update = 0;
     while (running) {
         time_t now = time(NULL);
+        uint64_t now_ms = get_time_ms();
 
         // Update system status every second
         if (now != last_update) {
             last_update = now;
-            sys_status_update(&sys_status);
+            sys_status_update_basic(&sys_status);
+            draw_current_page();
+        }
+
+        if (current_page == PAGE_SERVICES) {
+            if (last_service_refresh == 0 || now - last_service_refresh >= SERVICE_REFRESH_INTERVAL) {
+                sys_status_update_services(&sys_status);
+                last_service_refresh = now;
+                draw_current_page();
+            }
+        }
+
+        if (menu_active && now_ms - menu_last_input_ms >= MENU_TIMEOUT_MS) {
+            menu_exit();
             draw_current_page();
         }
 
@@ -303,11 +586,17 @@ int main(int argc, char *argv[]) {
         if (event != BTN_NONE) {
             handle_button(event);
         }
+
+        if (shake_ticks > 0 && display_on) {
+            draw_current_page();
+        }
     }
 
     // Cleanup
     syslog(LOG_INFO, "Shutting down...");
     display_shutdown();
+    sys_status_cleanup();
+    ubus_service_cleanup();
     gpio_button_cleanup();
     closelog();
 

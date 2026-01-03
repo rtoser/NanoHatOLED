@@ -2,65 +2,74 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <unistd.h>
 #include <time.h>
-#include <ctype.h>
-#include <dirent.h>
 #include <sys/sysinfo.h>
 #include <ifaddrs.h>
 #include <arpa/inet.h>
 #include <net/if.h>
+#include "ubus_service.h"
+
+// Cached file handles to avoid repeated open/close overhead
+static FILE *fp_stat = NULL;
+static FILE *fp_net = NULL;
+static FILE *fp_mem = NULL;
+static FILE *fp_temp = NULL;
 
 static uint64_t prev_idle = 0;
 static uint64_t prev_total = 0;
 static uint64_t prev_rx_bytes = 0;
 static uint64_t prev_tx_bytes = 0;
 static time_t prev_net_time = 0;
-static time_t prev_service_time = 0;
 
-#define SERVICE_CHECK_INTERVAL 5  // seconds
+typedef struct {
+    const char *display_name;
+    const char *ubus_name;
+} service_entry_t;
 
-// Check if a process with given name is running (without fork)
-static bool process_running(const char *name) {
-    DIR *dir = opendir("/proc");
-    if (!dir) return false;
+static const service_entry_t services[] = {
+    {"xray_core", "xray_core"},
+    {"dropbear", "dropbear"},
+    {"uhttpd", "uhttpd"},
+    {"dockerd", "dockerd"},
+    {NULL, NULL}
+};
 
-    struct dirent *ent;
-    bool found = false;
-
-    while ((ent = readdir(dir)) != NULL) {
-        // Only check numeric directories (PIDs)
-        if (ent->d_type != DT_DIR || !isdigit(ent->d_name[0]))
-            continue;
-
-        char path[280], comm[32];
-        snprintf(path, sizeof(path), "/proc/%s/comm", ent->d_name);
-
-        FILE *f = fopen(path, "r");
-        if (f) {
-            if (fgets(comm, sizeof(comm), f)) {
-                comm[strcspn(comm, "\n")] = 0;  // Remove newline
-                if (strcmp(comm, name) == 0) {
-                    found = true;
-                    fclose(f);
-                    break;
-                }
-            }
-            fclose(f);
-        }
-    }
-    closedir(dir);
-    return found;
+void sys_status_init(void) {
+    // Open files once
+    fp_stat = fopen("/proc/stat", "r");
+    fp_net = fopen("/proc/net/dev", "r");
+    fp_mem = fopen("/proc/meminfo", "r");
+    fp_temp = fopen("/sys/class/thermal/thermal_zone0/temp", "r");
 }
 
-void sys_status_update(sys_status_t *status) {
-    memset(status, 0, sizeof(sys_status_t));
+void sys_status_cleanup(void) {
+    if (fp_stat) fclose(fp_stat);
+    if (fp_net) fclose(fp_net);
+    if (fp_mem) fclose(fp_mem);
+    if (fp_temp) fclose(fp_temp);
+}
 
-    // CPU usage
-    FILE *fp = fopen("/proc/stat", "r");
-    if (fp) {
+void sys_status_update_basic(sys_status_t *status) {
+    status->cpu_usage = 0.0f;
+    status->cpu_temp = 0.0f;
+    status->mem_total = 0;
+    status->mem_free = 0;
+    status->mem_available = 0;
+    status->ip_addr[0] = '\0';
+    status->hostname[0] = '\0';
+    status->uptime = 0;
+    status->rx_bytes = 0;
+    status->tx_bytes = 0;
+    status->rx_speed = 0;
+    status->tx_speed = 0;
+
+    // 1. CPU usage
+    if (fp_stat) {
+        rewind(fp_stat);
         char line[256];
-        if (fgets(line, sizeof(line), fp)) {
+        if (fgets(line, sizeof(line), fp_stat)) {
             uint64_t user, nice, system, idle, iowait, irq, softirq;
             if (sscanf(line, "cpu %lu %lu %lu %lu %lu %lu %lu",
                        &user, &nice, &system, &idle, &iowait, &irq, &softirq) == 7) {
@@ -78,115 +87,176 @@ void sys_status_update(sys_status_t *status) {
                 prev_idle = idle_all;
             }
         }
-        fclose(fp);
     }
 
-    // CPU temperature
-    fp = fopen("/sys/class/thermal/thermal_zone0/temp", "r");
-    if (fp) {
+    // 2. CPU temperature
+    if (fp_temp) {
+        rewind(fp_temp);
         int temp;
-        if (fscanf(fp, "%d", &temp) == 1) {
+        if (fscanf(fp_temp, "%d", &temp) == 1) {
             status->cpu_temp = temp / 1000.0f;
         }
-        fclose(fp);
     }
 
-    // Memory info
-    fp = fopen("/proc/meminfo", "r");
-    if (fp) {
+    // 3. Memory info
+    if (fp_mem) {
+        rewind(fp_mem);
         char line[128];
-        while (fgets(line, sizeof(line), fp)) {
+        int found = 0;
+        while (fgets(line, sizeof(line), fp_mem) && found < 3) {
             if (strncmp(line, "MemTotal:", 9) == 0) {
                 sscanf(line + 9, "%lu", &status->mem_total);
+                found++;
             } else if (strncmp(line, "MemFree:", 8) == 0) {
                 sscanf(line + 8, "%lu", &status->mem_free);
+                found++;
             } else if (strncmp(line, "MemAvailable:", 13) == 0) {
                 sscanf(line + 13, "%lu", &status->mem_available);
+                found++;
             }
         }
-        fclose(fp);
     }
 
-    // Hostname
-    gethostname(status->hostname, sizeof(status->hostname) - 1);
+    // 4. Hostname (ensure NUL termination)
+    if (gethostname(status->hostname, sizeof(status->hostname) - 1) == 0) {
+        status->hostname[sizeof(status->hostname) - 1] = '\0';
+    } else {
+        strncpy(status->hostname, "Unknown", sizeof(status->hostname) - 1);
+        status->hostname[sizeof(status->hostname) - 1] = '\0';
+    }
 
-    // Uptime
+    // 5. Uptime
     struct sysinfo si;
     if (sysinfo(&si) == 0) {
         status->uptime = si.uptime;
     }
 
-    // IP address and network stats
+    // 6. IP address (Prioritize br-lan, then eth0, then anything non-local)
     struct ifaddrs *ifaddr, *ifa;
     if (getifaddrs(&ifaddr) == 0) {
-        for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
-            if (ifa->ifa_addr == NULL) continue;
-
-            // Skip loopback
-            if (ifa->ifa_flags & IFF_LOOPBACK) continue;
-
-            // Get IPv4 address
-            if (ifa->ifa_addr->sa_family == AF_INET && status->ip_addr[0] == 0) {
+        // Priority list
+        const char *iface_priority[] = {"br-lan", "eth0", "wlan0", NULL};
+        
+        for (int p = 0; iface_priority[p] != NULL && status->ip_addr[0] == 0; p++) {
+            for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+                if (ifa->ifa_addr == NULL) continue;
+                if (ifa->ifa_addr->sa_family != AF_INET) continue;
+                
+                if (strcmp(ifa->ifa_name, iface_priority[p]) == 0) {
+                    struct sockaddr_in *addr = (struct sockaddr_in *)ifa->ifa_addr;
+                    inet_ntop(AF_INET, &addr->sin_addr, status->ip_addr, sizeof(status->ip_addr));
+                    break;
+                }
+            }
+        }
+        
+        // Fallback: take first non-loopback
+        if (status->ip_addr[0] == 0) {
+            for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+                if (ifa->ifa_addr == NULL) continue;
+                if (ifa->ifa_addr->sa_family != AF_INET) continue;
+                if (ifa->ifa_flags & IFF_LOOPBACK) continue;
+                
                 struct sockaddr_in *addr = (struct sockaddr_in *)ifa->ifa_addr;
                 inet_ntop(AF_INET, &addr->sin_addr, status->ip_addr, sizeof(status->ip_addr));
+                break;
             }
         }
         freeifaddrs(ifaddr);
     }
+    if (status->ip_addr[0] == 0) strcpy(status->ip_addr, "No IP");
 
-    // Network stats (WAN interface: br-lan.10)
-    fp = fopen("/proc/net/dev", "r");
-    if (fp) {
+    // 7. Network stats - get traffic from default gateway interface
+    // First, find the default route interface from /proc/net/route
+    char gw_iface[16] = "";
+    FILE *fp_route = fopen("/proc/net/route", "r");
+    if (fp_route) {
         char line[256];
-        while (fgets(line, sizeof(line), fp)) {
-            if (strstr(line, "br-lan.10")) {
-                char iface[16];
-                sscanf(line, "%s %lu %*d %*d %*d %*d %*d %*d %*d %lu",
-                       iface, &status->rx_bytes, &status->tx_bytes);
-                break;
+        fgets(line, sizeof(line), fp_route); // Skip header
+        while (fgets(line, sizeof(line), fp_route)) {
+            char iface[16];
+            unsigned int dest;
+            if (sscanf(line, "%15s %x", iface, &dest) == 2) {
+                if (dest == 0) { // Default route (destination 0.0.0.0)
+                    strncpy(gw_iface, iface, sizeof(gw_iface) - 1);
+                    break;
+                }
             }
         }
-        fclose(fp);
+        fclose(fp_route);
+    }
+
+    // Fallback to IP interface priority if no default route found
+    if (gw_iface[0] == '\0') {
+        const char *fallback[] = {"br-lan", "eth0", "wlan0", NULL};
+        for (int i = 0; fallback[i]; i++) {
+            strncpy(gw_iface, fallback[i], sizeof(gw_iface) - 1);
+            break;
+        }
+    }
+
+    // Now get traffic for the gateway interface
+    if (fp_net && gw_iface[0] != '\0') {
+        rewind(fp_net);
+        char line[256];
+
+        while (fgets(line, sizeof(line), fp_net)) {
+            char *colon = strchr(line, ':');
+            if (!colon) continue;
+            *colon = ' ';
+
+            char iface[16];
+            uint64_t rx, tx;
+            char *p = line;
+            while (*p == ' ') p++;
+
+            if (sscanf(p, "%15s %lu %*d %*d %*d %*d %*d %*d %*d %lu", iface, &rx, &tx) >= 3) {
+                if (strcmp(iface, gw_iface) == 0) {
+                    status->rx_bytes = rx;
+                    status->tx_bytes = tx;
+                    break;
+                }
+            }
+        }
     }
 
     // Calculate network speed
     time_t now = time(NULL);
     if (prev_net_time > 0 && now > prev_net_time) {
         time_t elapsed = now - prev_net_time;
-        status->rx_speed = (status->rx_bytes - prev_rx_bytes) / elapsed;
-        status->tx_speed = (status->tx_bytes - prev_tx_bytes) / elapsed;
+        status->rx_speed = (status->rx_bytes > prev_rx_bytes) ? (status->rx_bytes - prev_rx_bytes) / elapsed : 0;
+        status->tx_speed = (status->tx_bytes > prev_tx_bytes) ? (status->tx_bytes - prev_tx_bytes) / elapsed : 0;
     }
     prev_rx_bytes = status->rx_bytes;
     prev_tx_bytes = status->tx_bytes;
     prev_net_time = now;
+}
 
-    // Fallback IP if none found
-    if (status->ip_addr[0] == 0) {
-        strcpy(status->ip_addr, "No IP");
-    }
+void sys_status_update_services(sys_status_t *status) {
+    status->service_count = 0;
 
-    // Service status checks - only update every SERVICE_CHECK_INTERVAL seconds
-    // Process name to check (from /proc/PID/comm)
-    static const char *services[] = {"xray", "dropbear", "dockerd", NULL};
-    static service_status_t cached_services[MAX_SERVICES];
-    static int cached_count = 0;
+    for (int i = 0; services[i].display_name != NULL && status->service_count < MAX_SERVICES; i++) {
+        bool installed = false;
+        bool running = false;
 
-    time_t svc_now = time(NULL);
-    if (prev_service_time == 0 || svc_now - prev_service_time >= SERVICE_CHECK_INTERVAL) {
-        prev_service_time = svc_now;
-        cached_count = 0;
-
-        for (int i = 0; services[i] != NULL && cached_count < MAX_SERVICES; i++) {
-            strncpy(cached_services[cached_count].name, services[i],
-                    sizeof(cached_services[0].name) - 1);
-            cached_services[cached_count].running = process_running(services[i]);
-            cached_count++;
+        // Check if service is installed and running
+        if (ubus_service_status(services[i].ubus_name, &installed, &running) < 0) {
+            continue; // ubus error, skip
         }
-    }
 
-    // Copy cached results to status
-    memcpy(status->services, cached_services, sizeof(cached_services));
-    status->service_count = cached_count;
+        // Only add installed services to the list
+        if (!installed) {
+            continue;
+        }
+
+        service_status_t *svc = &status->services[status->service_count];
+        strncpy(svc->name, services[i].display_name, sizeof(svc->name) - 1);
+        svc->name[sizeof(svc->name) - 1] = '\0';
+        strncpy(svc->ubus_name, services[i].ubus_name, sizeof(svc->ubus_name) - 1);
+        svc->ubus_name[sizeof(svc->ubus_name) - 1] = '\0';
+        svc->running = running;
+        status->service_count++;
+    }
 }
 
 void sys_status_format_uptime(uint32_t uptime, char *buf, int buflen) {
@@ -195,16 +265,14 @@ void sys_status_format_uptime(uint32_t uptime, char *buf, int buflen) {
     uint32_t mins = (uptime % 3600) / 60;
 
     if (days > 0) {
-        snprintf(buf, buflen, "%ud %uh %um", days, hours, mins);
-    } else if (hours > 0) {
-        snprintf(buf, buflen, "%uh %um", hours, mins);
+        snprintf(buf, buflen, "%ud %uh", days, hours);
     } else {
-        snprintf(buf, buflen, "%um", mins);
+        snprintf(buf, buflen, "%uh %um", hours, mins);
     }
 }
 
 void sys_status_format_bytes(uint64_t bytes, char *buf, int buflen) {
-    const char *units[] = {"B", "KB", "MB", "GB", "TB"};
+    const char *units[] = {"B", "K", "M", "G", "T"};
     int unit = 0;
     double size = bytes;
 
@@ -212,10 +280,7 @@ void sys_status_format_bytes(uint64_t bytes, char *buf, int buflen) {
         size /= 1024;
         unit++;
     }
-
-    if (unit == 0) {
-        snprintf(buf, buflen, "%lu %s", bytes, units[unit]);
-    } else {
-        snprintf(buf, buflen, "%.1f %s", size, units[unit]);
-    }
+    
+    if (unit == 0) snprintf(buf, buflen, "%lu%s", bytes, units[unit]);
+    else snprintf(buf, buflen, "%.1f%s", size, units[unit]);
 }
