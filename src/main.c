@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
@@ -13,9 +14,33 @@
 #define APP_NAME "nanohat-oled"
 #define VERSION "1.0.0"
 #define MENU_TIMEOUT_MS 10000
-#define SHAKE_TICKS 6
-#define SHAKE_OFFSET 2
 #define SERVICE_REFRESH_INTERVAL 5
+
+// Title animation
+typedef enum {
+    TITLE_ANIM_NONE = 0,
+    TITLE_ANIM_ENTER,   // Left -> Center (entering menu)
+    TITLE_ANIM_REJECT   // Right push -> bounce back (rejection)
+} title_anim_type_t;
+
+#define TITLE_ANIM_ENTER_FRAMES 5
+#define TITLE_ANIM_REJECT_FRAMES 11
+
+// Damped spring offsets for reject animation
+// Each position held for multiple frames to make bouncing visible at 60Hz
+static const int8_t reject_offsets[TITLE_ANIM_REJECT_FRAMES] = {
+    35, 35, 35,   // Right +35px, hold ~48ms (hit wall)
+    -18, -18,     // Bounce left, hold ~32ms
+    12, 12,       // Right again
+    -6,           // Left
+    3,            // Right (settling)
+    0             // Rest
+};
+
+// Frame timing
+#define FRAME_INTERVAL_MS 100      // 10 Hz normal refresh
+#define FRAME_INTERVAL_ANIM_MS 16  // ~60 Hz during animation
+#define STATUS_UPDATE_MS 1000      // 1 second status update
 
 // Display pages
 typedef enum {
@@ -26,6 +51,14 @@ typedef enum {
     PAGE_COUNT
 } page_t;
 
+// Page titles for animation calculation
+static const char *page_titles[] = {
+    "Status",    // PAGE_STATUS - hostname is dynamic, use placeholder
+    "Network",   // PAGE_NETWORK
+    "Services",  // PAGE_SERVICES
+    "System"     // PAGE_SYSTEM
+};
+
 static volatile int running = 1;
 static u8g2_t u8g2;
 static page_t current_page = PAGE_NETWORK;
@@ -34,8 +67,25 @@ static int display_on = 1;
 static int menu_active = 0;
 static int menu_selected = 0;
 static uint64_t menu_last_input_ms = 0;
-static int shake_ticks = 0;
 static time_t last_service_refresh = 0;
+
+// Title animation state
+static struct {
+    title_anim_type_t type;
+    int frame;
+    int target_x;  // For enter animation: target center x position
+} title_anim = {TITLE_ANIM_NONE, 0, 0};
+
+// Render state
+static int dirty = 1;  // Need redraw flag
+
+static inline void mark_dirty(void) {
+    dirty = 1;
+}
+
+static inline int is_animating(void) {
+    return title_anim.type != TITLE_ANIM_NONE;
+}
 
 static uint64_t get_time_ms(void) {
     struct timespec ts;
@@ -77,15 +127,26 @@ static inline void draw_box(int x, int y, int w, int h) {
     u8g2_DrawBox(&u8g2, x + g_x_offset, y, w, h);
 }
 
+static int page_supports_menu(page_t page);  // Forward declaration
+static int get_title_anim_offset(void);       // Forward declaration
+
 static void draw_header(const char *title, int centered, int show_indicator) {
     u8g2_SetFont(&u8g2, u8g2_font_8x13B_tf);  // Bold title
-    int x = 0;
+
+    // Calculate base x position
+    int base_x = 0;
     if (centered) {
         int w = u8g2_GetStrWidth(&u8g2, title);
-        x = (128 - w) / 2;
-        if (x < 0) x = 0;
+        base_x = (128 - w) / 2;
+        if (base_x < 0) base_x = 0;
     }
-    draw_str(x, 11, title);
+
+    // Apply title animation offset
+    int anim_offset = get_title_anim_offset();
+    int x = base_x + anim_offset;
+    if (x < 0) x = 0;
+
+    u8g2_DrawStr(&u8g2, x, 11, title);
 
     if (show_indicator) {
         // Page indicator in top right
@@ -93,10 +154,34 @@ static void draw_header(const char *title, int centered, int show_indicator) {
         snprintf(indicator, sizeof(indicator), "%d/%d", current_page + 1, PAGE_COUNT);
         u8g2_SetFont(&u8g2, u8g2_font_5x7_tf);
         int w = u8g2_GetStrWidth(&u8g2, indicator);
-        draw_str(128 - w, 11, indicator);
+        u8g2_DrawStr(&u8g2, 128 - w, 11, indicator);
     }
 
-    draw_hline(0, 13, 128);
+    u8g2_DrawHLine(&u8g2, 0, 13, 128);
+}
+
+// Draw navigation indicator arrows at bottom right
+// ▼ = can enter (long press K2), ▲ = can exit (long press K2)
+static void draw_nav_indicator(void) {
+    int can_enter = page_supports_menu(current_page) && !menu_active;
+    int can_exit = menu_active;
+
+    // Arrow dimensions: 7 wide x 4 tall
+    int cx = 124;  // center x
+
+    if (can_enter && can_exit) {
+        // Both arrows stacked vertically
+        // Up arrow: top
+        u8g2_DrawTriangle(&u8g2, cx, 52, cx - 3, 56, cx + 3, 56);
+        // Down arrow: bottom
+        u8g2_DrawTriangle(&u8g2, cx - 3, 58, cx + 3, 58, cx, 62);
+    } else if (can_exit) {
+        // Up arrow only (exit)
+        u8g2_DrawTriangle(&u8g2, cx, 57, cx - 3, 62, cx + 3, 62);
+    } else if (can_enter) {
+        // Down arrow only (enter)
+        u8g2_DrawTriangle(&u8g2, cx - 3, 57, cx + 3, 57, cx, 62);
+    }
 }
 
 static void draw_page_status(void) {
@@ -241,27 +326,64 @@ static void render_page(page_t page) {
         default:
             break;
     }
+
+    // Draw navigation indicator (enter/exit arrows)
+    draw_nav_indicator();
 }
 
-static int get_shake_offset(void) {
-    if (shake_ticks <= 0) return 0;
-    int offset = (shake_ticks % 2 == 0) ? -SHAKE_OFFSET : SHAKE_OFFSET;
-    shake_ticks--;
-    return offset;
+// Get current title x offset for animation
+static int get_title_anim_offset(void) {
+    if (title_anim.type == TITLE_ANIM_NONE) return 0;
+
+    if (title_anim.type == TITLE_ANIM_REJECT) {
+        // Damped spring: lookup table
+        if (title_anim.frame < TITLE_ANIM_REJECT_FRAMES) {
+            return reject_offsets[title_anim.frame];
+        }
+        return 0;
+    }
+
+    if (title_anim.type == TITLE_ANIM_ENTER) {
+        // Linear motion for snappy feel
+        float t = (float)title_anim.frame / TITLE_ANIM_ENTER_FRAMES;
+        return (int)(t * title_anim.target_x);
+    }
+
+    return 0;
 }
 
-static void trigger_shake(void) {
-    shake_ticks = SHAKE_TICKS;
+// Advance animation frame, return true if still animating
+static int advance_title_anim(void) {
+    if (title_anim.type == TITLE_ANIM_NONE) return 0;
+
+    title_anim.frame++;
+
+    int max_frames = (title_anim.type == TITLE_ANIM_ENTER)
+                     ? TITLE_ANIM_ENTER_FRAMES
+                     : TITLE_ANIM_REJECT_FRAMES;
+
+    if (title_anim.frame >= max_frames) {
+        title_anim.type = TITLE_ANIM_NONE;
+        title_anim.frame = 0;
+        return 0;
+    }
+    return 1;
+}
+
+// Start title animation
+static void start_title_anim(title_anim_type_t type, int target_x) {
+    title_anim.type = type;
+    title_anim.frame = 0;
+    title_anim.target_x = target_x;
+    mark_dirty();
 }
 
 static void draw_current_page(void) {
     if (!display_on) return;
 
     u8g2_ClearBuffer(&u8g2);
-    g_x_offset = get_shake_offset();
     render_page(current_page);
     u8g2_SendBuffer(&u8g2);
-    g_x_offset = 0;
 }
 
 // Pre-render a page to a buffer (1024 bytes for 128x64 monochrome)
@@ -364,7 +486,10 @@ static void toggle_display(void) {
     u8g2_SetPowerSave(&u8g2, !display_on);
     syslog(LOG_INFO, "Display %s", display_on ? "ON" : "OFF");
     if (display_on) {
-        draw_current_page();
+        mark_dirty();
+    } else {
+        // Clear animation state to avoid idle spinning
+        title_anim.type = TITLE_ANIM_NONE;
     }
 }
 
@@ -384,14 +509,14 @@ static void handle_button(button_event_t event) {
                 if (count > 0) {
                     menu_selected = (menu_selected + count - 1) % count;
                     menu_touch();
-                    draw_current_page();
+                    mark_dirty();
                 }
                 return;
             case BTN_K3_PRESS:
                 if (count > 0) {
                     menu_selected = (menu_selected + 1) % count;
                     menu_touch();
-                    draw_current_page();
+                    mark_dirty();
                 }
                 return;
             case BTN_K2_PRESS:
@@ -407,12 +532,12 @@ static void handle_button(button_event_t event) {
                     }
                     menu_touch();
                     last_service_refresh = time(NULL);
-                    draw_current_page();
+                    mark_dirty();
                 }
                 return;
             case BTN_K2_LONG_PRESS:
                 menu_exit();
-                draw_current_page();
+                mark_dirty();
                 return;
             default:
                 return;
@@ -431,7 +556,9 @@ static void handle_button(button_event_t event) {
                 sys_status_update_services(&sys_status);
                 last_service_refresh = time(NULL);
             }
-            transition_to_page(old_page, new_page, -1);  // Slide right
+            // NOTE: transition is blocking (~160ms at 800kHz I2C) - acceptable for
+            // smooth animation UX. Button events during transition are queued by kernel.
+            transition_to_page(old_page, new_page, -1);
             return;
 
         case BTN_K3_PRESS:  // Next page (slide left)
@@ -442,7 +569,8 @@ static void handle_button(button_event_t event) {
                 sys_status_update_services(&sys_status);
                 last_service_refresh = time(NULL);
             }
-            transition_to_page(old_page, new_page, +1);  // Slide left
+            // NOTE: transition is blocking - see BTN_K1_PRESS comment
+            transition_to_page(old_page, new_page, +1);
             return;
 
         case BTN_K2_PRESS:  // Toggle display
@@ -450,12 +578,22 @@ static void handle_button(button_event_t event) {
             return;
 
         case BTN_K2_LONG_PRESS:
+            syslog(LOG_DEBUG, "K2 long press on page %d", current_page);
             if (page_supports_menu(current_page)) {
+                // Do ubus call FIRST (blocking) before animation starts
                 menu_enter();
-                draw_current_page();
+                // Then start animation - no blocking delay affects animation playback
+                const char *title = page_titles[current_page];
+                u8g2_SetFont(&u8g2, u8g2_font_8x13B_tf);
+                int title_w = u8g2_GetStrWidth(&u8g2, title);
+                int center_x = (128 - title_w) / 2;
+                if (center_x < 0) center_x = 0;
+                start_title_anim(TITLE_ANIM_ENTER, center_x);  // Slide to center
+                mark_dirty();
             } else {
-                trigger_shake();
-                draw_current_page();
+                syslog(LOG_DEBUG, "Starting reject animation");
+                start_title_anim(TITLE_ANIM_REJECT, 0);  // Bounce rejection
+                mark_dirty();
             }
             return;
 
@@ -560,43 +698,102 @@ int main(int argc, char *argv[]) {
     sys_status_update_services(&sys_status);
     last_service_refresh = time(NULL);
     draw_current_page();
+    dirty = 0;
 
-    // Main loop - use interrupt-driven button wait
-    time_t last_update = 0;
+    // Main loop - time-driven rendering with event-driven input
+    uint64_t next_frame_ms = get_time_ms() + FRAME_INTERVAL_MS;
+    uint64_t next_status_ms = get_time_ms() + STATUS_UPDATE_MS;
+    uint64_t next_service_ms = get_time_ms() + SERVICE_REFRESH_INTERVAL * 1000;
+
     while (running) {
-        time_t now = time(NULL);
         uint64_t now_ms = get_time_ms();
 
-        // Update system status every second
-        if (now != last_update) {
-            last_update = now;
-            sys_status_update_basic(&sys_status);
-            draw_current_page();
-        }
+        // Calculate timeout: minimum of all pending deadlines
+        int64_t timeout = next_frame_ms - now_ms;
 
+        // Also consider status update deadline
+        int64_t status_wait = next_status_ms - now_ms;
+        if (status_wait < timeout) timeout = status_wait;
+
+        // Service refresh (only on services page)
         if (current_page == PAGE_SERVICES) {
-            if (last_service_refresh == 0 || now - last_service_refresh >= SERVICE_REFRESH_INTERVAL) {
-                sys_status_update_services(&sys_status);
-                last_service_refresh = now;
-                draw_current_page();
-            }
+            int64_t service_wait = next_service_ms - now_ms;
+            if (service_wait < timeout) timeout = service_wait;
         }
 
-        if (menu_active && now_ms - menu_last_input_ms >= MENU_TIMEOUT_MS) {
-            menu_exit();
-            draw_current_page();
+        // Menu timeout check
+        if (menu_active) {
+            int64_t menu_wait = (menu_last_input_ms + MENU_TIMEOUT_MS) - now_ms;
+            if (menu_wait < timeout) timeout = menu_wait;
         }
 
-        // Wait for button event (interrupt) or timeout
-        // Dynamic timeout: fast (16ms) during animation, slow (100ms) when idle
-        int timeout_ms = (shake_ticks > 0) ? 16 : 100;
-        button_event_t event = gpio_button_wait(timeout_ms);
+        // Clamp timeout
+        if (timeout < 0) timeout = 0;
+        if (timeout > 1000) timeout = 1000;
+
+        // Wait for button event or timeout
+        button_event_t event = gpio_button_wait((int)timeout);
+
+        // Handle button immediately (fast path, just updates state)
         if (event != BTN_NONE) {
             handle_button(event);
         }
 
-        if (shake_ticks > 0 && display_on) {
-            draw_current_page();
+        // Update current time after potential blocking
+        now_ms = get_time_ms();
+
+        // --- Timed tasks (update state, set dirty) ---
+
+        // 1. Status update (1 second interval)
+        if (now_ms >= next_status_ms) {
+            sys_status_update_basic(&sys_status);
+            mark_dirty();
+            next_status_ms = now_ms + STATUS_UPDATE_MS;
+        }
+
+        // 2. Service list refresh (5 second interval, only on services page)
+        if (current_page == PAGE_SERVICES && now_ms >= next_service_ms) {
+            sys_status_update_services(&sys_status);
+            last_service_refresh = time(NULL);
+            mark_dirty();
+            next_service_ms = now_ms + SERVICE_REFRESH_INTERVAL * 1000;
+        }
+
+        // 3. Menu timeout
+        if (menu_active && now_ms >= menu_last_input_ms + MENU_TIMEOUT_MS) {
+            menu_exit();
+            mark_dirty();
+        }
+
+        // --- Rendering (only when needed, at frame deadline) ---
+        int need_render = dirty || is_animating();
+
+        if (need_render) {
+            // Ensure we render soon if something needs drawing
+            if (next_frame_ms > now_ms + FRAME_INTERVAL_ANIM_MS) {
+                next_frame_ms = now_ms;  // Render immediately
+            }
+
+            if (now_ms >= next_frame_ms) {
+                if (display_on) {
+                    draw_current_page();
+                    // Advance title animation
+                    if (advance_title_anim()) {
+                        mark_dirty();  // Continue animating next frame
+                    }
+                }
+                dirty = 0;
+
+                // Advance frame time, skip frames if behind (no drift)
+                int frame_interval = is_animating() ? FRAME_INTERVAL_ANIM_MS : FRAME_INTERVAL_MS;
+                next_frame_ms += frame_interval;
+                while (next_frame_ms <= now_ms) {
+                    next_frame_ms += frame_interval;  // Catch up, allow frame drop
+                }
+            }
+        } else {
+            // Idle: push next_frame far out, rely on timed tasks to wake us
+            next_frame_ms = now_ms + 10000;  // Will be clamped by timed task deadlines
         }
     }
 
