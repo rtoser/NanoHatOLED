@@ -9,9 +9,17 @@ PROG=/usr/bin/nanohat-oled
 NAME=nanohat-oled
 
 start_service() {
+    # Check if I2C device exists before starting
+    if [ ! -e /dev/i2c-0 ]; then
+        echo "NanoHat OLED: I2C device /dev/i2c-0 not found. Aborting start." >&2
+        return 1
+    fi
+
     procd_open_instance "$NAME"
+    # Run in foreground (no -d) so procd can monitor the process
     procd_set_param command "$PROG"
-    procd_set_param respawn ${respawn_threshold:-3600} ${respawn_timeout:-5} ${respawn_retry:-5}
+    # Respawn: if exits within 3600s, wait 5s, retry up to 5 times
+    procd_set_param respawn 3600 5 5
     procd_set_param stdout 1
     procd_set_param stderr 1
     procd_set_param pidfile /var/run/${NAME}.pid

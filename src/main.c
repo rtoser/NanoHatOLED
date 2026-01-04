@@ -465,6 +465,12 @@ static void handle_button(button_event_t event) {
 }
 
 static int display_init(void) {
+    // Check if I2C device is accessible
+    if (access("/dev/i2c-0", R_OK | W_OK) != 0) {
+        syslog(LOG_ERR, "Cannot access /dev/i2c-0: %m");
+        return -1;
+    }
+
     u8g2_Setup_ssd1306_i2c_128x64_noname_f(
         &u8g2,
         U8G2_R0,
@@ -581,8 +587,10 @@ int main(int argc, char *argv[]) {
             draw_current_page();
         }
 
-        // Wait for button event (interrupt) or timeout after 100ms
-        button_event_t event = gpio_button_wait(100);
+        // Wait for button event (interrupt) or timeout
+        // Dynamic timeout: fast (16ms) during animation, slow (100ms) when idle
+        int timeout_ms = (shake_ticks > 0) ? 16 : 100;
+        button_event_t event = gpio_button_wait(timeout_ms);
         if (event != BTN_NONE) {
             handle_button(event);
         }
