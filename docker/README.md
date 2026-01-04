@@ -14,16 +14,16 @@
 
 ```bash
 cd docker
-./build.sh 24.10.5
+./build.sh
 ```
 
-这将创建镜像 `openwrt-sdk-sunxi-24.10.5`（约 1.9GB）。
+这将创建镜像 `openwrt-sdk-sunxi`（约 1.9GB）。
 
 ### 2. 编译项目
 
 ```bash
 # 在项目根目录
-docker run --rm -v "$(pwd)/src:/src" openwrt-sdk-sunxi-24.10.5 sh build_in_docker.sh
+docker run --rm -v "$(pwd)/src:/src" openwrt-sdk-sunxi sh /src/build_in_docker.sh
 ```
 
 输出：`src/nanohat-oled`（静态链接的 aarch64 可执行文件）
@@ -31,9 +31,9 @@ docker run --rm -v "$(pwd)/src:/src" openwrt-sdk-sunxi-24.10.5 sh build_in_docke
 ### 3. 交互式开发
 
 ```bash
-docker run -it --rm -v "$(pwd)/src:/src" openwrt-sdk-sunxi-24.10.5
+docker run -it --rm -v "$(pwd)/src:/src" openwrt-sdk-sunxi
 # 容器内
-sh build_in_docker.sh
+sh /src/build_in_docker.sh
 ```
 
 ## 文件说明
@@ -94,7 +94,7 @@ aarch64-openwrt-linux-musl-strip  # 符号剥离
 
 ```bash
 # 在容器内编译测试程序
-docker run --rm -v "$(pwd)/docker:/src" openwrt-sdk-sunxi-24.10.5 make -f Makefile.test
+docker run --rm -v "$(pwd)/docker:/src" openwrt-sdk-sunxi make -f Makefile.test
 
 # 部署到设备测试
 scp docker/test_ubus root@<device-ip>:/tmp/

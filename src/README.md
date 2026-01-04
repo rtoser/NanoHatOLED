@@ -38,11 +38,10 @@
 ```bash
 # 1. 首次使用需构建 Docker 镜像（约 5-10 分钟）
 cd docker
-./build.sh 24.10.5
+./build.sh
 
 # 2. 编译项目
-cd ..
-docker run --rm -v "$(pwd)/src:/src" openwrt-sdk-sunxi-24.10.5 sh build_in_docker.sh
+docker run --rm -v "$(pwd)/src:/src" openwrt-sdk-sunxi sh /src/build_in_docker.sh
 ```
 
 输出：`src/nanohat-oled`（静态链接的 aarch64 可执行文件，约 15MB）
@@ -58,16 +57,21 @@ make CC=gcc
 ## 部署
 
 ```bash
+# 停止服务
+ssh root@<device-ip> "service nanohat-oled stop; sleep 1"
+
 # 上传可执行文件
 scp nanohat-oled root@<device-ip>:/usr/bin/
 
-# 安装服务脚本
-scp nanohat-oled.init root@<device-ip>:/etc/init.d/nanohat-oled
-ssh root@<device-ip> "chmod +x /etc/init.d/nanohat-oled"
+# 启动服务
+ssh root@<device-ip> "service nanohat-oled start"
+```
 
-# 启用并启动服务
-ssh root@<device-ip> "/etc/init.d/nanohat-oled enable"
-ssh root@<device-ip> "/etc/init.d/nanohat-oled start"
+首次部署需额外安装服务脚本：
+
+```bash
+scp nanohat-oled.init root@<device-ip>:/etc/init.d/nanohat-oled
+ssh root@<device-ip> "chmod +x /etc/init.d/nanohat-oled && /etc/init.d/nanohat-oled enable"
 ```
 
 ## 命令行参数

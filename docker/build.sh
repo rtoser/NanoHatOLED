@@ -4,15 +4,9 @@ set -e
 
 cd "$(dirname "$0")"
 
-# Check required version parameter
-if [ -z "$1" ]; then
-    echo "Usage: $0 <version>"
-    echo "Example: $0 24.10.5"
-    exit 1
-fi
-
-VERSION="$1"
-IMAGE_NAME="openwrt-sdk-sunxi-${VERSION}"
+# Default version, can be overridden by parameter
+VERSION="${1:-24.10.5}"
+IMAGE_NAME="openwrt-sdk-sunxi"
 SDK_FILE="openwrt-sdk-${VERSION}-sunxi-cortexa53_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
 SDK_URL="https://mirrors.tuna.tsinghua.edu.cn/openwrt/releases/${VERSION}/targets/sunxi/cortexa53/${SDK_FILE}"
 
@@ -52,8 +46,8 @@ echo "=== Build complete ==="
 echo "Image: ${IMAGE_NAME}"
 echo ""
 echo "Usage:"
-echo "  # Interactive shell"
-echo "  docker run -it --rm -v \$(pwd)/src:/src ${IMAGE_NAME}"
-echo ""
 echo "  # Build project"
-echo "  docker run --rm -v \$(pwd)/src:/src ${IMAGE_NAME} make"
+echo "  docker run --rm -v \"\$(pwd)/src:/src\" ${IMAGE_NAME} sh /src/build_in_docker.sh"
+echo ""
+echo "  # Interactive shell"
+echo "  docker run -it --rm -v \"\$(pwd)/src:/src\" ${IMAGE_NAME}"
