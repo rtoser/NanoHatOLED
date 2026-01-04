@@ -75,3 +75,6 @@ openwrt-sdk-24.10.5-sunxi-cortexa53_gcc-13.3.0_musl.Linux-x86_64
 openwrt-sdk-24.10.5-sunxi-cortexa53_gcc-13.3.0_musl.Linux-x86_64.tar.zst
 docker/build.log
 .owrt
+
+# MCP config (contains secrets)
+.mcp.json
