@@ -1,109 +1,71 @@
 # OpenWrt SDK Docker 构建环境
 
-用于交叉编译 NanoHat OLED 驱动的 Docker 容器，基于 OpenWrt 官方 SDK。
+本项目提供两套方案来构建一个包含预编译依赖 (`libubus`, `libgpiod`) 的 OpenWrt SDK Docker 镜像。
 
-## 目标平台
+最终生成的本地镜像名称统一为 `openwrt-sdk:<TAG>` 格式（如 `openwrt-sdk:rockchip-armv8-24.10.5`），可供下游编译脚本无缝使用。
 
-- **设备**: NanoPi NEO2 Plus
-- **架构**: aarch64 (ARM Cortex-A53)
-- **系统**: OpenWrt 24.10.x (Linux 6.6, musl libc)
+---
 
-## 快速开始
+## 构建方案
 
-### 1. 构建 Docker 镜像
+### 方案一：基于官方 SDK 镜像 (推荐)
+此方案基于 OpenWrt 官方 Docker Hub 镜像。
+*   **优点**: 更接近官方环境，构建过程相对简单。
+*   **缺点**: 基础镜像较大。
 
+**使用方法** (在 `docker/` 目录下运行):
 ```bash
-cd docker
-./build.sh
+./build-official.sh
 ```
 
-这将创建镜像 `openwrt-sdk-sunxi`（约 1.9GB）。
+### 方案二：从零构建 (基于 Debian)
+此方案基于轻量的 `debian:bookworm-slim` 镜像，手动下载并解压 SDK。
+*   **优点**: 最终镜像体积显著减小 (约 1.4GB vs 2.9GB)。
+*   **缺点**: 构建步骤更复杂，依赖外部镜像站。
 
-### 2. 编译项目
-
+**使用方法** (在项目根目录运行):
 ```bash
-# 在项目根目录
-docker run --rm -v "$(pwd)/src:/src" openwrt-sdk-sunxi sh /src/build_in_docker.sh
+./docker/build.sh
 ```
 
-输出：`src/nanohat-oled`（静态链接的 aarch64 可执行文件）
+---
 
-### 3. 交互式开发
+## 核心构建逻辑 (通用)
 
-```bash
-docker run -it --rm -v "$(pwd)/src:/src" openwrt-sdk-sunxi
-# 容器内
-sh /src/build_in_docker.sh
-```
+两套方案都采用了以下核心技术以确保镜像的纯净、高效和稳定：
+
+1.  **多阶段构建 (Multi-stage Builds)**:
+    *   **Builder 阶段**: 在一个临时的构建环境中，完成下载 feeds、编译 `libubus` 和 `libgpiod` 等所有“脏活累活”。此阶段会产生大量构建垃圾（如 `build_dir`, `dl`）。
+    *   **Final 阶段**: 以一个干净的基础镜像开始，**仅拷贝** Builder 阶段生成的、已填充好库和头文件的 `staging_dir` 目录。所有临时的构建垃圾都被丢弃。
+
+2.  **优势**:
+    *   **体积小**: 最终镜像只比官方镜像大了几十兆（新增的库文件），而不是近 1GB 的构建垃圾。
+    *   **速度快**: `compile_in_docker.sh` 无需再编译依赖，可以直接链接，大大加快了项目本身的编译速度。
+
+3.  **依赖净化**:
+    *   通过 `patch_libgpiod_makefile.sh` 脚本，自动化地移除了 `libgpiod` 对 Python 的不必要依赖，确保了环境的最小化。
+
+4.  **稳定性**:
+    *   对于 `ubus` 及其依赖 `lua` 的编译，强制使用 `-j1` (单线程) 模式，以避免在 Docker/QEMU 环境下因 `jobserver` 问题导致的随机编译失败。
+
+---
 
 ## 文件说明
 
-| 文件 | 说明 |
-|------|------|
-| `Dockerfile` | Docker 镜像定义 |
-| `build.sh` | 镜像构建脚本（接收版本号参数） |
-| `test_ubus.c` | libubus 链接验证程序 |
-| `Makefile.test` | 测试程序编译规则 |
+| 文件 | 方案 | 说明 |
+| :--- | :--- | :--- |
+| `Dockerfile` | **方案二** | 从 Debian 基础镜像开始，采用多阶段构建。|
+| `build.sh` | **方案二** | 驱动 `Dockerfile` 的构建脚本。|
+| `Dockerfile.official` | **方案一** | 基于 OpenWrt 官方镜像，采用多阶段构建。 |
+| `build-official.sh` | **方案一** | 驱动 `Dockerfile.official` 的构建脚本。|
+| `patch_libgpiod_makefile.sh`| **通用** | 在构建时自动运行的补丁脚本。 |
 
-## 镜像构建过程
+---
 
-1. **下载 SDK**: 从清华镜像站下载 OpenWrt SDK
-2. **配置 feeds**: 使用 GitHub 镜像加速（git.openwrt.org → github.com/openwrt）
-3. **浅克隆**: base feed 使用 `--depth 1` 加速下载
-4. **编译依赖**: json-c, libubox, libubus
+## 下一步：编译项目
 
-## 环境变量
-
-容器内预配置：
+无论你选择哪种方案构建了 SDK 镜像，下一步都是一样的。在项目根目录运行：
 
 ```bash
-# 交叉编译器路径
-PATH=/opt/sdk/staging_dir/toolchain-aarch64_cortex-a53_gcc-13.3.0_musl/bin:$PATH
-
-# OpenWrt staging 目录
-STAGING_DIR=/opt/sdk/staging_dir
-
-# 目标平台 sysroot
-/opt/target → staging_dir/target-aarch64_cortex-a53_musl
+./compile_in_docker.sh rockchip-armv8-24.10.5
 ```
-
-## 可用的交叉编译工具
-
-```bash
-aarch64-openwrt-linux-musl-gcc    # C 编译器
-aarch64-openwrt-linux-musl-g++    # C++ 编译器
-aarch64-openwrt-linux-musl-ar     # 静态库工具
-aarch64-openwrt-linux-musl-strip  # 符号剥离
-```
-
-## 使用不同版本
-
-```bash
-# OpenWrt 24.10.5
-./build.sh 24.10.5
-
-# OpenWrt 23.05.5 (如果需要)
-./build.sh 23.05.5
-```
-
-脚本会自动检查 SDK 是否存在于镜像站。
-
-## libubus 验证
-
-验证 libubus 链接是否正常工作：
-
-```bash
-# 在容器内编译测试程序
-docker run --rm -v "$(pwd)/docker:/src" openwrt-sdk-sunxi make -f Makefile.test
-
-# 部署到设备测试
-scp docker/test_ubus root@<device-ip>:/tmp/
-ssh root@<device-ip> "/tmp/test_ubus"
-```
-
-## 注意事项
-
-- LD_PRELOAD 的 `runas.so` 警告可以忽略（SDK 内部权限隔离机制）
-- 首次构建约需 5-10 分钟（取决于网络速度）
-- 镜像大小约 1.9GB，包含完整的 OpenWrt SDK 和工具链
-- 主程序编译依赖 libubus/libubox/libblobmsg_json/libjson-c，镜像内已预置

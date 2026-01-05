@@ -1,0 +1,34 @@
+# Dockerfile (Final, based on official SDK)
+
+# --- Stage 1: The Builder ---
+ARG SDK_IMAGE_TAG=rockchip-armv8-24.10.5
+FROM openwrt/sdk:${SDK_IMAGE_TAG} AS builder
+
+USER buildbot
+WORKDIR /builder
+
+# 1. Update and install package definitions
+RUN ./scripts/feeds update base packages
+RUN ./scripts/feeds install ubus libgpiod
+
+# 2. Patch libgpiod Makefile
+COPY --chown=buildbot:buildbot patch_libgpiod_makefile.sh /builder/
+RUN chmod +x /builder/patch_libgpiod_makefile.sh && /builder/patch_libgpiod_makefile.sh
+
+# 3. Configure
+RUN make defconfig
+
+# 4. Compile dependencies with optimized parallelism
+RUN make package/feeds/base/ubus/compile V=s -j1 && \
+    make package/feeds/packages/libgpiod/compile V=s -j$(nproc)
+
+# --- Stage 2: The Final Image ---
+FROM openwrt/sdk:${SDK_IMAGE_TAG}
+
+# Copy the populated staging_dir from the builder stage.
+COPY --from=builder /builder/staging_dir /builder/staging_dir
+
+USER buildbot
+WORKDIR /builder
+ENV STAGING_DIR="/builder/staging_dir"
+CMD ["/bin/bash"]

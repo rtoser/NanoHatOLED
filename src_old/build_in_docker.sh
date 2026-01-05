@@ -1,6 +1,15 @@
 #!/bin/sh
 set -e
 
+# Auto-detect OpenWrt SDK paths in /builder
+if [ -d "/builder/staging_dir" ]; then
+    TOOLCHAIN_DIR=$(find /builder/staging_dir -maxdepth 1 -type d -name "toolchain-*" | head -1)
+    TARGET_DIR=$(find /builder/staging_dir -maxdepth 1 -type d -name "target-*" | head -1)
+    if [ -n "$TOOLCHAIN_DIR" ]; then
+        export PATH="$TOOLCHAIN_DIR/bin:$PATH"
+    fi
+fi
+
 # Auto-detect compiler (OpenWrt SDK or generic musl toolchain)
 if command -v aarch64-openwrt-linux-musl-gcc >/dev/null 2>&1; then
     CC=aarch64-openwrt-linux-musl-gcc
