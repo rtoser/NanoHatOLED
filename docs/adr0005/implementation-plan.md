@@ -43,7 +43,7 @@
 
 ## Phase 2 GPIO 迁移（libgpiod + 去抖 fallback + 编译期宏）
 
-**状态**：已完成（Host Mock）
+**状态**：已完成（Host Mock + Target 验证）
 
 **任务**
 - 实现 `gpio_hal_libgpiod`（`get_fd()` + `read_edge_events()` + 软件去抖 fallback）
@@ -55,6 +55,7 @@
 - Target 侧硬件验证
   - Host 运行：`cd tests && make test-host`
   - Target 运行：`make test-target`（待接入）
+  - 验证结果：`gpiochip1` + `0/2/3` 可捕获按键事件
 
 **预计改动文件（核心）**
 - `src/hal/gpio_hal_libgpiod.c`

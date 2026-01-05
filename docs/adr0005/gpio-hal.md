@@ -4,7 +4,7 @@
 
 ## 编译期配置
 
-- `GPIOCHIP_PATH`：GPIO 芯片路径（默认 `/dev/gpiochip0`）
+- `GPIOCHIP_PATH`：GPIO 芯片路径（默认 `/dev/gpiochip1`）
 - `BTN_OFFSETS`：按键 line 偏移（默认 `0,2,3`）
 
 示例：

@@ -10,6 +10,7 @@ src_old/oled_demo
 tests/test_runner
 tests/test_ring_queue
 tests/test_gpio_button
+tests/target/test_gpio_hw
 
 # Vim backup
 README.md~

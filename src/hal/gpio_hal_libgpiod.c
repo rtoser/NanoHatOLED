@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <gpiod.h>
+#include <poll.h>
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -9,8 +10,12 @@
 
 #include "hal/time_hal.h"
 
+#ifdef GPIO_HAL_DEBUG
+#include <stdio.h>
+#endif
+
 #ifndef GPIOCHIP_PATH
-#define GPIOCHIP_PATH "/dev/gpiochip0"
+#define GPIOCHIP_PATH "/dev/gpiochip1"
 #endif
 
 #ifndef BTN_OFFSETS
@@ -259,64 +264,102 @@ int gpio_hal_libgpiod_wait_event(int timeout_ms, gpio_event_t *event) {
         return -1;
     }
 
-    pthread_mutex_lock(&g_lock);
-    if (pending_pop(event)) {
-        pthread_mutex_unlock(&g_lock);
-        return 1;
-    }
-    pthread_mutex_unlock(&g_lock);
+    int fd = gpiod_line_request_get_fd(g_request);
+    uint64_t start_ms = time_hal_now_ms();
+    int remaining_timeout = timeout_ms;
 
-    uint64_t now_ms = time_hal_now_ms();
-    int effective_timeout = timeout_ms;
-
-    pthread_mutex_lock(&g_lock);
-    for (int i = 0; i < NUM_BUTTONS; i++) {
-        if (g_pressed[i] && !g_long_reported[i]) {
-            uint64_t elapsed = now_ms - g_press_time_ms[i];
-            if (elapsed < LONG_PRESS_MS) {
-                int remaining = (int)(LONG_PRESS_MS - elapsed);
-                if (effective_timeout < 0 || remaining < effective_timeout) {
-                    effective_timeout = remaining;
-                }
-            } else {
-                g_long_reported[i] = true;
-                event->type = to_button_event(i, true);
-                event->line = (uint8_t)i;
-                event->timestamp_ns = time_hal_now_ns();
-                pthread_mutex_unlock(&g_lock);
-                return 1;
-            }
-        }
-    }
-    pthread_mutex_unlock(&g_lock);
-
-    int64_t timeout_ns = (effective_timeout < 0) ? -1 : (int64_t)effective_timeout * 1000000;
-    // wait_event 走阻塞等待；主线程可改用 get_fd + poll。
-    int ret = gpiod_line_request_wait_edge_events(g_request, timeout_ns);
-    if (ret <= 0) {
-        if (ret == 0 && check_long_press(event)) {
+    for (;;) {
+        pthread_mutex_lock(&g_lock);
+        if (pending_pop(event)) {
+            pthread_mutex_unlock(&g_lock);
             return 1;
         }
-        return ret;
-    }
 
-    int num = gpiod_line_request_read_edge_events(g_request, g_event_buf, 16);
-    pthread_mutex_lock(&g_lock);
-    for (int i = 0; i < num; i++) {
-        struct gpiod_edge_event *edge = gpiod_edge_event_buffer_get_event(g_event_buf, i);
-        process_edge_event(edge);
-    }
-    if (pending_pop(event)) {
+        uint64_t now_ms = time_hal_now_ms();
+        int effective_timeout = remaining_timeout;
+        for (int i = 0; i < NUM_BUTTONS; i++) {
+            if (g_pressed[i] && !g_long_reported[i]) {
+                uint64_t elapsed = now_ms - g_press_time_ms[i];
+                if (elapsed < LONG_PRESS_MS) {
+                    int remaining = (int)(LONG_PRESS_MS - elapsed);
+                    if (effective_timeout < 0 || remaining < effective_timeout) {
+                        effective_timeout = remaining;
+                    }
+                } else {
+                    g_long_reported[i] = true;
+                    event->type = to_button_event(i, true);
+                    event->line = (uint8_t)i;
+                    event->timestamp_ns = time_hal_now_ns();
+                    pthread_mutex_unlock(&g_lock);
+                    return 1;
+                }
+            }
+        }
         pthread_mutex_unlock(&g_lock);
-        return 1;
-    }
-    pthread_mutex_unlock(&g_lock);
 
-    if (check_long_press(event)) {
-        return 1;
-    }
+        if (timeout_ms >= 0) {
+            uint64_t elapsed_total = now_ms - start_ms;
+            if (elapsed_total >= (uint64_t)timeout_ms) {
+                return 0;
+            }
+            int remaining = (int)((uint64_t)timeout_ms - elapsed_total);
+            if (effective_timeout < 0 || remaining < effective_timeout) {
+                effective_timeout = remaining;
+            }
+        }
 
-    return 0;
+        // 使用 fd + poll 等待事件，避免平台上 wait_edge_events 异常返回。
+#ifdef GPIO_HAL_DEBUG
+        fprintf(stderr, "[gpio_hal] wait_event timeout=%d fd=%d\n", effective_timeout, fd);
+#endif
+        if (fd >= 0) {
+            struct pollfd pfd = {.fd = fd, .events = POLLIN};
+            int pret = poll(&pfd, 1, effective_timeout);
+#ifdef GPIO_HAL_DEBUG
+            fprintf(stderr, "[gpio_hal] poll ret=%d revents=0x%x errno=%d\n", pret, pfd.revents, errno);
+#endif
+            if (pret <= 0) {
+                if (pret == 0 && check_long_press(event)) {
+                    return 1;
+                }
+                if (pret < 0) {
+                    return pret;
+                }
+                continue;
+            }
+        } else {
+            int64_t timeout_ns = (effective_timeout < 0) ? -1 : (int64_t)effective_timeout * 1000000;
+            int ret = gpiod_line_request_wait_edge_events(g_request, timeout_ns);
+            if (ret <= 0) {
+                if (ret == 0 && check_long_press(event)) {
+                    return 1;
+                }
+                if (ret < 0) {
+                    return ret;
+                }
+                continue;
+            }
+        }
+
+        int num = gpiod_line_request_read_edge_events(g_request, g_event_buf, 16);
+#ifdef GPIO_HAL_DEBUG
+        fprintf(stderr, "[gpio_hal] read_edge_events num=%d errno=%d\n", num, errno);
+#endif
+        pthread_mutex_lock(&g_lock);
+        for (int i = 0; i < num; i++) {
+            struct gpiod_edge_event *edge = gpiod_edge_event_buffer_get_event(g_event_buf, i);
+            process_edge_event(edge);
+        }
+        if (pending_pop(event)) {
+            pthread_mutex_unlock(&g_lock);
+            return 1;
+        }
+        pthread_mutex_unlock(&g_lock);
+
+        if (check_long_press(event)) {
+            return 1;
+        }
+    }
 }
 
 int gpio_hal_libgpiod_get_fd(void) {

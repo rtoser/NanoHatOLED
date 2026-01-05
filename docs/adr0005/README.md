@@ -19,7 +19,7 @@
 ## 当前进度
 
 - Phase 1：已完成（Host）
-- Phase 2：已完成（Host），Target 验证待接入
+- Phase 2：已完成（Host），Target 基础验证通过（gpiochip1:0/2/3）
 
 ## 迁移说明
 

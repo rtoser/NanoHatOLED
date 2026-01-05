@@ -75,7 +75,7 @@ test-host: CFLAGS += -DHAL_MOCK
 test-host: SRCS += $(wildcard hal/*_mock.c)
 
 # Target 生产构建
-release: CFLAGS += -DHAL_REAL -DGPIOCHIP_PATH=\"/dev/gpiochip0\" -DBTN_OFFSETS=\"0,2,3\"
+release: CFLAGS += -DHAL_REAL -DGPIOCHIP_PATH=\"/dev/gpiochip1\" -DBTN_OFFSETS=\"0,2,3\"
 release: SRCS += hal/gpio_hal_libgpiod.c hal/ubus_hal_real.c
 ```
 
