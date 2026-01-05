@@ -3,14 +3,21 @@ CFLAGS ?= -O2 -Wall -Wextra -std=c11
 
 INCLUDES := -I../src -I./mocks
 
-TEST_SRCS := test_ring_queue.c mocks/time_mock.c
-TEST_OBJS := $(TEST_SRCS:.c=.o)
+RING_TEST_SRCS := test_ring_queue.c
+GPIO_TEST_SRCS := test_gpio_button.c mocks/time_mock.c
 
-test-host: test_runner
-	./test_runner
+RING_TEST_OBJS := $(RING_TEST_SRCS:.c=.o) ../src/ring_queue.o
+GPIO_TEST_OBJS := $(GPIO_TEST_SRCS:.c=.o) ../src/hal/gpio_hal_mock.o
 
-test_runner: $(TEST_OBJS) ../src/ring_queue.o
-	$(CC) $(CFLAGS) $(TEST_OBJS) ../src/ring_queue.o -lpthread -o $@
+test-host: test_ring_queue test_gpio_button
+	./test_ring_queue
+	./test_gpio_button
+
+test_ring_queue: $(RING_TEST_OBJS)
+	$(CC) $(CFLAGS) $(RING_TEST_OBJS) -lpthread -o $@
+
+test_gpio_button: $(GPIO_TEST_OBJS)
+	$(CC) $(CFLAGS) $(GPIO_TEST_OBJS) -lpthread -o $@
 
 %.o: %.c
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
@@ -19,4 +26,4 @@ test_runner: $(TEST_OBJS) ../src/ring_queue.o
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 clean:
-	rm -f $(TEST_OBJS) ../src/*.o test_runner
+	rm -f $(RING_TEST_SRCS:.c=.o) $(GPIO_TEST_SRCS:.c=.o) ../src/*.o ../src/hal/*.o test_ring_queue test_gpio_button

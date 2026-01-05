@@ -8,6 +8,8 @@ NanoHatOLED
 src_old/nanohat-oled
 src_old/oled_demo
 tests/test_runner
+tests/test_ring_queue
+tests/test_gpio_button
 
 # Vim backup
 README.md~

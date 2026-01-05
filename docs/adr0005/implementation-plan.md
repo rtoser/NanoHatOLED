@@ -4,6 +4,8 @@
 
 ## Phase 1 基础设施
 
+**状态**：已完成
+
 **任务**
 - 实现可配置溢出策略的 `ring_queue`（覆盖/拒绝/合并）
 - 补齐 HAL 头文件与 `time_hal`，保证 Host 可编译
@@ -11,6 +13,7 @@
 **测试**
 - `test_ring_queue.c` 覆盖覆盖/拒绝/合并策略
 - `time_mock` 驱动可控时间
+  - Host 运行：`cd tests && make test-host`
 
 **预计改动文件（核心）**
 - `src/ring_queue.c`
@@ -26,7 +29,21 @@
 - `tests/mocks/time_mock.h`
 - `tests/Makefile`
 
+**实际产出**
+- `src/ring_queue.c`
+- `src/ring_queue.h`
+- `src/hal/gpio_hal.h`
+- `src/hal/display_hal.h`
+- `src/hal/ubus_hal.h`
+- `src/hal/time_hal.h`
+- `tests/test_ring_queue.c`
+- `tests/mocks/time_mock.c`
+- `tests/mocks/time_mock.h`
+- `tests/Makefile`
+
 ## Phase 2 GPIO 迁移（libgpiod + 去抖 fallback + 编译期宏）
+
+**状态**：已完成（Host Mock）
 
 **任务**
 - 实现 `gpio_hal_libgpiod`（`get_fd()` + `read_edge_events()` + 软件去抖 fallback）
@@ -36,6 +53,8 @@
 **测试**
 - `test_gpio_button.c` 覆盖短/长按、去抖 fallback、`get_fd()` 与 `wait_event()` 一致性
 - Target 侧硬件验证
+  - Host 运行：`cd tests && make test-host`
+  - Target 运行：`make test-target`（待接入）
 
 **预计改动文件（核心）**
 - `src/hal/gpio_hal_libgpiod.c`
@@ -43,9 +62,16 @@
 
 **预计改动文件（测试）**
 - `tests/test_gpio_button.c`
-- `tests/mocks/gpio_mock.c`
 - `tests/mocks/gpio_mock.h`
 - `tests/target/test_gpio_hw.c`
+
+**实际产出**
+- `src/hal/gpio_hal_libgpiod.c`
+- `src/hal/gpio_hal_mock.c`
+- `tests/test_gpio_button.c`
+- `tests/mocks/gpio_mock.h`
+- `tests/target/test_gpio_hw.c`
+- `tests/Makefile`
 
 ## Phase 3 双线程（事件队列 + 主线程 + UI 线程）
 

@@ -398,7 +398,7 @@ void gpio_button_cleanup(void) {
 
 ## 7. 迁移路径
 
-> **详细测试计划**: 参见 [测试架构设计](../testing-architecture.md)
+> **详细测试计划**: 参见 [测试架构设计](../adr0005/testing-architecture.md)
 
 每个 Phase 采用 **Host Mock 测试 → Target 集成测试** 的验证策略。
 
@@ -469,3 +469,9 @@ void gpio_button_cleanup(void) {
 ---
 
 本 ADR 作为 NanoHatOLED 终极架构的实施蓝图，整合了事件驱动、异步 I/O、远程控制等核心需求。
+
+## 9. 相关文档
+
+- [ADR0005 文档索引](../adr0005/README.md)
+- [测试架构设计](../adr0005/testing-architecture.md)
+- [重新实现计划（分阶段）](../adr0005/implementation-plan.md)

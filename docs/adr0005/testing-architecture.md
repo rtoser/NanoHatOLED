@@ -34,6 +34,12 @@
 | **Host** (macOS/Linux) | `gcc` (native) | Mock | 单元测试、逻辑验证、CI |
 | **Target** (OpenWrt) | `aarch64-openwrt-linux-musl-gcc` | Real | 集成测试、系统测试 |
 
+### 1.3 当前实现状态（摘要）
+
+- Phase 1 与 Phase 2 已完成 Host Mock 测试
+- Host 运行：`cd tests && make test-host`（执行 `test_ring_queue` 与 `test_gpio_button`）
+- Target 侧已有 `tests/target/test_gpio_hw.c`，需手动交叉编译部署（Makefile 待接入）
+
 ## 2. 硬件抽象层 (HAL)
 
 ### 2.1 设计原则
@@ -72,6 +78,8 @@ test-host: SRCS += $(wildcard hal/*_mock.c)
 release: CFLAGS += -DHAL_REAL -DGPIOCHIP_PATH=\"/dev/gpiochip0\" -DBTN_OFFSETS=\"0,2,3\"
 release: SRCS += hal/gpio_hal_libgpiod.c hal/ubus_hal_real.c
 ```
+
+当前测试构建入口：`tests/Makefile`。
 
 ## 3. 分阶段测试计划
 
@@ -168,7 +176,7 @@ tests/
 
 **Mock 能力**:
 ```c
-// tests/mocks/gpio_mock.c
+// tests/mocks/gpio_mock.h（由 gpio_hal_mock 提供）
 void gpio_mock_inject_edge(int line, edge_type_t type, uint64_t timestamp_ns);
 void gpio_mock_set_line_value(int line, int value);
 void gpio_mock_clear_events(void);
@@ -637,6 +645,6 @@ make test-target
 
 ## 6. 参考
 
-- [ADR 0005: 终极三线程架构](adr/0005-ultimate-threaded-architecture.md)
+- [ADR 0005: 终极三线程架构](../adr/0005-ultimate-threaded-architecture.md)
 - [libgpiod v2.x API](https://libgpiod.readthedocs.io/)
 - [Unity Test Framework](http://www.throwtheswitch.org/unity)
