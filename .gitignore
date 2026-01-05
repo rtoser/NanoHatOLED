@@ -5,8 +5,9 @@ NanoHatOLED
 
 # Build artifacts
 *.o
-src/nanohat-oled
-src/oled_demo
+src_old/nanohat-oled
+src_old/oled_demo
+tests/test_runner
 
 # Vim backup
 README.md~
@@ -78,3 +79,4 @@ docker/build.log
 
 # MCP config (contains secrets)
 .mcp.json
+dl
