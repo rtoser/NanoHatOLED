@@ -6,6 +6,7 @@
 
 - [ADR 0005：终极三线程架构](../adr/0005-ultimate-threaded-architecture.md)
 - [线程模型细化](thread-model.md)
+- [新人入门指南](onboarding.md)
 
 ## HAL 说明
 

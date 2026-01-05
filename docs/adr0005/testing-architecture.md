@@ -38,7 +38,7 @@
 
 - Phase 1 与 Phase 2 已完成 Host Mock 测试
 - Host 运行：`cd tests && make test-host`（执行 `test_ring_queue` 与 `test_gpio_button`）
-- Target 侧已有 `tests/target/test_gpio_hw.c`，需手动交叉编译部署（Makefile 待接入）
+- Target 侧已有 `tests/target/test_gpio_hw.c`，`tests/Makefile` 提供 `test-target`
 
 ## 2. 硬件抽象层 (HAL)
 
@@ -534,31 +534,26 @@ tests/
 └── Makefile
 ```
 
-### 4.2 构建命令
+### 4.2 构建与运行命令（以 `tests/Makefile` 为准）
 
-```makefile
-# tests/Makefile
-
-# Host 单元测试（示例，按阶段选择 SRCS）
-TEST_SRCS := $(wildcard test_*.c) mocks/*.c
-TEST_SRCS += ../src/ring_queue.c ../src/event_queue.c ../src/task_queue.c
-test-host:
-	gcc -DHAL_MOCK -I../src -I./mocks $(TEST_SRCS) \
-	    -lpthread -o test_runner
-	./test_runner
-
-# Target 集成测试
-test-target:
-	$(CROSS_CC) -DHAL_REAL -I../src \
-	    target/test_gpio_hw.c ../src/hal/gpio_hal_libgpiod.c \
-	    -lgpiod -o test_gpio_hw
-	scp test_gpio_hw root@$(TARGET):/tmp/
-	ssh root@$(TARGET) /tmp/test_gpio_hw
-
-# CI 测试
-test-ci: test-host
-	@echo "CI tests passed"
+**Host 单元测试**：
+```bash
+cd tests
+make test-host
 ```
+
+**Target 集成测试（GPIO）**：
+```bash
+cd tests
+make test-target TARGET=192.168.33.254 TARGET_USER=root \
+  DOCKER_IMAGE=openwrt-sdk:sunxi-cortexa53-24.10.5 \
+  GPIOCHIP_PATH=/dev/gpiochip1 BTN_OFFSETS=0,2,3
+```
+
+说明：
+- `test-target` 会使用 Docker 交叉编译并上传到 `/tmp/test_gpio_hw` 后自动执行
+- 测试执行期间需要人工按键（10 秒内）
+- 建议先停止服务：`ssh root@<ip> "service nanohat-oled stop; sleep 1"`
 
 ### 4.3 Mock 时间控制
 
@@ -592,6 +587,17 @@ jobs:
 ```
 
 ---
+
+## 4.5 Target 测试流程（GPIO）
+
+1. 停止服务：`ssh root@<ip> "service nanohat-oled stop; sleep 1"`
+2. 运行：`cd tests && make test-target ...`
+3. 看到提示后按任意按键：
+   - PASS 示例：`PASS: event=K1_SHORT line=0 ts=...`
+   - FAIL 示例：`FAIL: ret=0`（超时无事件）
+4. 若失败，先用 `gpiomon` 确认映射：
+   - `gpiomon -c gpiochip1 -e both --idle-timeout 10s 0 2 3`
+   - 注意参数顺序：选项在前，line 在后
 
 ## 5. 开发工作流
 
