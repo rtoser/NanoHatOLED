@@ -10,10 +10,6 @@
 
 #include "hal/time_hal.h"
 
-#ifdef GPIO_HAL_DEBUG
-#include <stdio.h>
-#endif
-
 #ifndef GPIOCHIP_PATH
 #define GPIOCHIP_PATH "/dev/gpiochip1"
 #endif
@@ -309,15 +305,9 @@ int gpio_hal_libgpiod_wait_event(int timeout_ms, gpio_event_t *event) {
         }
 
         // 使用 fd + poll 等待事件，避免平台上 wait_edge_events 异常返回。
-#ifdef GPIO_HAL_DEBUG
-        fprintf(stderr, "[gpio_hal] wait_event timeout=%d fd=%d\n", effective_timeout, fd);
-#endif
         if (fd >= 0) {
             struct pollfd pfd = {.fd = fd, .events = POLLIN};
             int pret = poll(&pfd, 1, effective_timeout);
-#ifdef GPIO_HAL_DEBUG
-            fprintf(stderr, "[gpio_hal] poll ret=%d revents=0x%x errno=%d\n", pret, pfd.revents, errno);
-#endif
             if (pret <= 0) {
                 if (pret == 0 && check_long_press(event)) {
                     return 1;
@@ -342,9 +332,6 @@ int gpio_hal_libgpiod_wait_event(int timeout_ms, gpio_event_t *event) {
         }
 
         int num = gpiod_line_request_read_edge_events(g_request, g_event_buf, 16);
-#ifdef GPIO_HAL_DEBUG
-        fprintf(stderr, "[gpio_hal] read_edge_events num=%d errno=%d\n", num, errno);
-#endif
         pthread_mutex_lock(&g_lock);
         for (int i = 0; i < num; i++) {
             struct gpiod_edge_event *edge = gpiod_edge_event_buffer_get_event(g_event_buf, i);

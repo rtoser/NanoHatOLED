@@ -21,7 +21,6 @@ int main(void) {
         return 1;
     }
 
-    printf("GPIO fd: %d\n", gpio_hal->get_fd());
     printf("Press any key within 10 seconds...\n");
     gpio_event_t evt;
     int ret = gpio_hal->wait_event(10000, &evt);
