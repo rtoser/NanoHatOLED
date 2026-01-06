@@ -1,0 +1,126 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2023 FriendlyElec Computer Tech. Co., Ltd.
+ * (http://www.friendlyelec.com)
+ *
+ * Copyright (c) 2021 Rockchip Electronics Co., Ltd.
+ */
+
+/dts-v1/;
+
+#include "rk3588-nanopi6-rev02.dts"
+
+/ {
+	model = "FriendlyElec NanoPi R6C";
+	compatible = "friendlyelec,nanopi-r6c", "rockchip,rk3588";
+
+	aliases {
+		ethernet0 = &r8125_u25;
+	};
+};
+
+&mach {
+	hwrev = <4>;
+	model = "NanoPi R6C";
+};
+
+&lan2_led {
+	label = "user_led";
+};
+
+&pcie2x1l2 {
+	rockchip,skip-hw-retry;
+	rockchip,wait-for-link-ms = <1000>;
+	/delete-node/ pcie@40;
+};
+
+/* GPIO Connector */
+&gpio0 {
+	gpio-line-names =
+		/* GPIO0 A0-A7 */
+		"", "", "", "",
+		"", "", "", "",
+		/* GPIO0 B0-B7 */
+		"", "", "", "",
+		"", "", "", "",
+		/* GPIO0 C0-C7 */
+		"", "", "", "",
+		"", "", "", "",
+		/* GPIO0 D0-D7 */
+		"", "", "", "",
+		"PIN_12", "", "", "";
+};
+
+&gpio1 {
+	gpio-line-names =
+		/* GPIO1 A0-A7 */
+		"", "", "PIN_26", "PIN_29",
+		"", "", "", "",
+		/* GPIO1 B0-B7 */
+		"", "PIN_21", "PIN_19", "PIN_23",
+		"PIN_24", "", "PIN_27", "PIN_28",
+		/* GPIO1 C0-C7 */
+		"", "", "", "",
+		"", "", "", "",
+		/* GPIO1 D0-D7 */
+		"", "", "", "",
+		"", "", "PIN_05", "PIN_03";
+};
+
+&gpio2 {
+	gpio-line-names =
+		/* GPIO2 A0-A7 */
+		"", "", "", "",
+		"", "", "", "",
+		/* GPIO2 B0-B7 */
+		"", "", "", "",
+		"", "", "", "",
+		/* GPIO2 C0-C7 */
+		"", "", "", "",
+		"", "", "", "",
+		/* GPIO2 D0-D7 */
+		"", "", "", "",
+		"", "", "", "";
+};
+
+&gpio3 {
+	gpio-line-names =
+		/* GPIO3 A0-A7 */
+		"", "", "", "",
+		"", "", "", "",
+		/* GPIO3 B0-B7 */
+		"", "", "", "",
+		"", "", "", "",
+		/* GPIO3 C0-C7 */
+		"", "", "", "",
+		"PIN_08 [UART5_TX_M1]", "PIN_10 [UART5_RX_M1]", "", "",
+		/* GPIO3 D0-D7 */
+		"", "", "", "",
+		"", "", "", "";
+};
+
+&gpio4 {
+	gpio-line-names =
+		/* GPIO4 A0-A7 */
+		"PIN_07", "PIN_11", "PIN_13", "",
+		"", "PIN_15", "PIN_16", "",
+		/* GPIO4 B0-B7 */
+		"", "PIN_18", "PIN_22", "",
+		"", "", "", "",
+		/* GPIO4 C0-C7 */
+		"", "", "", "",
+		"", "", "", "",
+		/* GPIO4 D0-D7 */
+		"", "", "", "",
+		"", "", "", "";
+};
+
+&pwm0 {
+	pinctrl-0 = <&pwm0m2_pins>;
+	status = "okay";
+};
+
+&pwm1 {
+	pinctrl-0 = <&pwm1m2_pins>;
+	status = "okay";
+};
