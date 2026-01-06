@@ -22,7 +22,7 @@ RUN tar --zstd -xf /tmp/${SDK_FILE} -C / && \
 # 3. Switch to build user and build dependencies
 USER buildbot
 WORKDIR /builder
-COPY --chown=buildbot:buildbot docker/patch_libgpiod_makefile.sh .
+COPY --chown=buildbot:buildbot patch_libgpiod_makefile.sh .
 RUN chmod +x patch_libgpiod_makefile.sh
 RUN ./scripts/feeds update base packages
 RUN ./scripts/feeds install ubus libgpiod
@@ -35,7 +35,8 @@ RUN make package/feeds/base/ubus/compile V=s -j1 && \
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates vim tree wget curl git vim tree file zstd rsync libncurses-dev\
+    ca-certificates vim tree wget curl git vim tree file zstd \
+    rsync cmake libncurses-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -ms /bin/bash buildbot

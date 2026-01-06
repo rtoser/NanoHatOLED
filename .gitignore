@@ -83,3 +83,4 @@ docker/build.log
 # MCP config (contains secrets)
 .mcp.json
 dl
+docker/dl

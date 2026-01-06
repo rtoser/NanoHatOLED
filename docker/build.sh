@@ -1,8 +1,8 @@
 #!/bin/bash
 # Build SDK image from scratch (debian-based)
 set -e
-# This script is designed to be run from the project root.
-cd "$(dirname "$0")/.."
+# This script is designed to run from anywhere; docker/ is the build context.
+cd "$(dirname "$0")"
 
 # --- Configuration ---
 SDK_TAG="${1:-rockchip-armv8-24.10.5}"
@@ -79,14 +79,14 @@ for ((i=1; i<=MAX_RETRIES; i++)); do
 done
 
 echo "=== Building SDK Image (Manual Method): ${IMAGE_NAME} ==="
-# Build context is the project root
+# Build context is docker/
 docker build \
     --platform linux/amd64 \
     --build-arg SDK_FILE="${SDK_FILE}" \
     --build-arg SDK_DIR="${SDK_DIR}" \
     --build-arg SDK_IMAGE_TAG="${SDK_TAG}" \
     -t "${IMAGE_NAME}" \
-    -f docker/Dockerfile \
+    -f Dockerfile \
     .
 
 echo "Build complete: ${IMAGE_NAME}"
