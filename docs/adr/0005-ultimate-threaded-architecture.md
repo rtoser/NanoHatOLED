@@ -466,12 +466,13 @@ void gpio_button_cleanup(void) {
 | 0003 | Merged → 0005 | ubus 工作线程 |
 | 0004 | Merged → 0005 | ubus 对象注册 |
 
+## 9. 相关文档
+
+| 文档 | 说明 |
+|------|------|
+| [测试架构设计](../adr0005/testing-architecture.md) | 分阶段测试策略与用例 |
+| [Phase 1-2 实现设计](../design/phase1-2-implementation.md) | 队列库与 GPIO HAL 详细设计 |
+
 ---
 
 本 ADR 作为 NanoHatOLED 终极架构的实施蓝图，整合了事件驱动、异步 I/O、远程控制等核心需求。
-
-## 9. 相关文档
-
-- [ADR0005 文档索引](../adr0005/README.md)
-- [测试架构设计](../adr0005/testing-architecture.md)
-- [重新实现计划（分阶段）](../adr0005/implementation-plan.md)

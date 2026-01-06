@@ -80,6 +80,9 @@ static int detect_pressed_level(void) {
     int ones = 0;
     for (int i = 0; i < NUM_BUTTONS; i++) {
         int val = gpiod_line_request_get_value(g_request, g_btn_offsets[i]);
+        if (val < 0) {
+            return -1;
+        }
         if (val == 0) {
             zeros++;
         } else {
@@ -143,8 +146,7 @@ static void process_edge_event(struct gpiod_edge_event *event) {
     }
 }
 
-static bool check_long_press(gpio_event_t *event) {
-    uint64_t now_ms = time_hal_now_ms();
+static bool emit_long_press_locked(uint64_t now_ms, gpio_event_t *event) {
     for (int i = 0; i < NUM_BUTTONS; i++) {
         if (g_pressed[i] && !g_long_reported[i]) {
             if (now_ms - g_press_time_ms[i] >= LONG_PRESS_MS) {
@@ -157,6 +159,70 @@ static bool check_long_press(gpio_event_t *event) {
         }
     }
     return false;
+}
+
+static int calc_long_press_timeout_locked(uint64_t now_ms) {
+    int effective_timeout = -1;
+    for (int i = 0; i < NUM_BUTTONS; i++) {
+        if (g_pressed[i] && !g_long_reported[i]) {
+            uint64_t elapsed = now_ms - g_press_time_ms[i];
+            if (elapsed < LONG_PRESS_MS) {
+                int remaining = (int)(LONG_PRESS_MS - elapsed);
+                if (effective_timeout < 0 || remaining < effective_timeout) {
+                    effective_timeout = remaining;
+                }
+            }
+        }
+    }
+    return effective_timeout;
+}
+
+static bool pop_pending_or_long_press(uint64_t now_ms, gpio_event_t *event, int *long_press_timeout) {
+    int timeout = -1;
+    bool has_event = false;
+    pthread_mutex_lock(&g_lock);
+    if (pending_pop(event)) {
+        has_event = true;
+    } else if (emit_long_press_locked(now_ms, event)) {
+        has_event = true;
+    } else {
+        timeout = calc_long_press_timeout_locked(now_ms);
+    }
+    pthread_mutex_unlock(&g_lock);
+    if (long_press_timeout) {
+        *long_press_timeout = timeout;
+    }
+    return has_event;
+}
+
+static int wait_for_edge_event(int fd, int timeout_ms) {
+    if (fd >= 0) {
+        struct pollfd pfd = {.fd = fd, .events = POLLIN};
+        int pret = poll(&pfd, 1, timeout_ms);
+        if (pret <= 0) {
+            return pret;
+        }
+        return 1;
+    }
+
+    int64_t timeout_ns = (timeout_ms < 0) ? -1 : (int64_t)timeout_ms * 1000000;
+    return gpiod_line_request_wait_edge_events(g_request, timeout_ns);
+}
+
+static int read_and_process_edges(gpio_event_t *event) {
+    int num = gpiod_line_request_read_edge_events(g_request, g_event_buf, 16);
+    if (num < 0) {
+        return -1;
+    }
+
+    pthread_mutex_lock(&g_lock);
+    for (int i = 0; i < num; i++) {
+        struct gpiod_edge_event *edge = gpiod_edge_event_buffer_get_event(g_event_buf, i);
+        process_edge_event(edge);
+    }
+    bool has_event = pending_pop(event);
+    pthread_mutex_unlock(&g_lock);
+    return has_event ? 1 : 0;
 }
 
 static struct gpiod_line_request *request_lines(bool with_debounce) {
@@ -233,6 +299,16 @@ int gpio_hal_libgpiod_init(void) {
     }
 
     g_pressed_level = detect_pressed_level();
+    if (g_pressed_level < 0) {
+        gpiod_edge_event_buffer_free(g_event_buf);
+        g_event_buf = NULL;
+        gpiod_line_request_release(g_request);
+        g_request = NULL;
+        gpiod_chip_close(g_chip);
+        g_chip = NULL;
+        pthread_mutex_unlock(&g_lock);
+        return -1;
+    }
     pthread_mutex_unlock(&g_lock);
     return 0;
 }
@@ -262,36 +338,13 @@ int gpio_hal_libgpiod_wait_event(int timeout_ms, gpio_event_t *event) {
 
     int fd = gpiod_line_request_get_fd(g_request);
     uint64_t start_ms = time_hal_now_ms();
-    int remaining_timeout = timeout_ms;
 
     for (;;) {
-        pthread_mutex_lock(&g_lock);
-        if (pending_pop(event)) {
-            pthread_mutex_unlock(&g_lock);
+        uint64_t now_ms = time_hal_now_ms();
+        int effective_timeout = -1;
+        if (pop_pending_or_long_press(now_ms, event, &effective_timeout)) {
             return 1;
         }
-
-        uint64_t now_ms = time_hal_now_ms();
-        int effective_timeout = remaining_timeout;
-        for (int i = 0; i < NUM_BUTTONS; i++) {
-            if (g_pressed[i] && !g_long_reported[i]) {
-                uint64_t elapsed = now_ms - g_press_time_ms[i];
-                if (elapsed < LONG_PRESS_MS) {
-                    int remaining = (int)(LONG_PRESS_MS - elapsed);
-                    if (effective_timeout < 0 || remaining < effective_timeout) {
-                        effective_timeout = remaining;
-                    }
-                } else {
-                    g_long_reported[i] = true;
-                    event->type = to_button_event(i, true);
-                    event->line = (uint8_t)i;
-                    event->timestamp_ns = time_hal_now_ns();
-                    pthread_mutex_unlock(&g_lock);
-                    return 1;
-                }
-            }
-        }
-        pthread_mutex_unlock(&g_lock);
 
         if (timeout_ms >= 0) {
             uint64_t elapsed_total = now_ms - start_ms;
@@ -305,45 +358,25 @@ int gpio_hal_libgpiod_wait_event(int timeout_ms, gpio_event_t *event) {
         }
 
         // 使用 fd + poll 等待事件，避免平台上 wait_edge_events 异常返回。
-        if (fd >= 0) {
-            struct pollfd pfd = {.fd = fd, .events = POLLIN};
-            int pret = poll(&pfd, 1, effective_timeout);
-            if (pret <= 0) {
-                if (pret == 0 && check_long_press(event)) {
-                    return 1;
-                }
-                if (pret < 0) {
-                    return pret;
-                }
-                continue;
+        int wait_ret = wait_for_edge_event(fd, effective_timeout);
+        if (wait_ret <= 0) {
+            if (wait_ret == 0 && pop_pending_or_long_press(time_hal_now_ms(), event, NULL)) {
+                return 1;
             }
-        } else {
-            int64_t timeout_ns = (effective_timeout < 0) ? -1 : (int64_t)effective_timeout * 1000000;
-            int ret = gpiod_line_request_wait_edge_events(g_request, timeout_ns);
-            if (ret <= 0) {
-                if (ret == 0 && check_long_press(event)) {
-                    return 1;
-                }
-                if (ret < 0) {
-                    return ret;
-                }
-                continue;
+            if (wait_ret < 0) {
+                return wait_ret;
             }
+            continue;
         }
 
-        int num = gpiod_line_request_read_edge_events(g_request, g_event_buf, 16);
-        pthread_mutex_lock(&g_lock);
-        for (int i = 0; i < num; i++) {
-            struct gpiod_edge_event *edge = gpiod_edge_event_buffer_get_event(g_event_buf, i);
-            process_edge_event(edge);
+        int processed = read_and_process_edges(event);
+        if (processed < 0) {
+            return -1;
         }
-        if (pending_pop(event)) {
-            pthread_mutex_unlock(&g_lock);
+        if (processed > 0) {
             return 1;
         }
-        pthread_mutex_unlock(&g_lock);
-
-        if (check_long_press(event)) {
+        if (pop_pending_or_long_press(time_hal_now_ms(), event, NULL)) {
             return 1;
         }
     }

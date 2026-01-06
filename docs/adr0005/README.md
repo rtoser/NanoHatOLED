@@ -17,6 +17,10 @@
 - [测试架构设计](testing-architecture.md)
 - [重新实现计划（分阶段）](implementation-plan.md)
 
+## 设计规格
+
+- [Phase 1-2 实现设计](../design/phase1-2-implementation.md)
+
 ## 当前进度
 
 - Phase 1：已完成（Host）

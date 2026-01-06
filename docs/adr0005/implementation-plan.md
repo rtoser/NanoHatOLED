@@ -57,6 +57,10 @@
   - Target 运行：`make test-target`（待接入）
   - 验证结果：`gpiochip1` + `0/2/3` 可捕获按键事件
 
+**构建说明**
+- `gpio_hal_libgpiod.c` 与 `gpio_hal_mock.c` 只能二选一链接
+- Host 测试默认使用 Mock；Target/实际运行需链接 libgpiod 实现
+
 **预计改动文件（核心）**
 - `src/hal/gpio_hal_libgpiod.c`
 - `src/hal/gpio_hal_mock.c`

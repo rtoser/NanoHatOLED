@@ -16,11 +16,16 @@ static uint64_t ms_to_ns(uint64_t ms) {
     return ms * 1000000ULL;
 }
 
-static int test_short_press_k1(void) {
-    gpio_mock_set_debounce_supported(true);
+static void setup_default_lines(bool debounce_supported) {
+    gpio_mock_set_debounce_supported(debounce_supported);
     gpio_mock_set_line_value(0, 1);
     gpio_mock_set_line_value(1, 1);
     gpio_mock_set_line_value(2, 1);
+    gpio_mock_clear_events();
+}
+
+static int test_short_press_k1(void) {
+    setup_default_lines(true);
     TEST_ASSERT(gpio_hal->init() == 0);
 
     time_mock_set_now_ms(0);
@@ -36,11 +41,42 @@ static int test_short_press_k1(void) {
     return 0;
 }
 
+static int test_short_press_k2(void) {
+    setup_default_lines(true);
+    TEST_ASSERT(gpio_hal->init() == 0);
+
+    time_mock_set_now_ms(0);
+    gpio_mock_inject_edge(1, EDGE_FALLING, ms_to_ns(0));
+    time_mock_set_now_ms(100);
+    gpio_mock_inject_edge(1, EDGE_RISING, ms_to_ns(100));
+
+    gpio_event_t evt;
+    int ret = gpio_hal->wait_event(200, &evt);
+    TEST_ASSERT(ret == 1);
+    TEST_ASSERT(evt.type == GPIO_EVT_BTN_K2_SHORT);
+    gpio_hal->cleanup();
+    return 0;
+}
+
+static int test_short_press_k3(void) {
+    setup_default_lines(true);
+    TEST_ASSERT(gpio_hal->init() == 0);
+
+    time_mock_set_now_ms(0);
+    gpio_mock_inject_edge(2, EDGE_FALLING, ms_to_ns(0));
+    time_mock_set_now_ms(100);
+    gpio_mock_inject_edge(2, EDGE_RISING, ms_to_ns(100));
+
+    gpio_event_t evt;
+    int ret = gpio_hal->wait_event(200, &evt);
+    TEST_ASSERT(ret == 1);
+    TEST_ASSERT(evt.type == GPIO_EVT_BTN_K3_SHORT);
+    gpio_hal->cleanup();
+    return 0;
+}
+
 static int test_long_press_k2(void) {
-    gpio_mock_set_debounce_supported(true);
-    gpio_mock_set_line_value(0, 1);
-    gpio_mock_set_line_value(1, 1);
-    gpio_mock_set_line_value(2, 1);
+    setup_default_lines(true);
     TEST_ASSERT(gpio_hal->init() == 0);
 
     time_mock_set_now_ms(0);
@@ -56,10 +92,7 @@ static int test_long_press_k2(void) {
 }
 
 static int test_debounce_soft_fallback(void) {
-    gpio_mock_set_debounce_supported(false);
-    gpio_mock_set_line_value(0, 1);
-    gpio_mock_set_line_value(1, 1);
-    gpio_mock_set_line_value(2, 1);
+    setup_default_lines(false);
     TEST_ASSERT(gpio_hal->init() == 0);
 
     time_mock_set_now_ms(0);
@@ -78,10 +111,7 @@ static int test_debounce_soft_fallback(void) {
 }
 
 static int test_timeout_no_event(void) {
-    gpio_mock_set_debounce_supported(true);
-    gpio_mock_set_line_value(0, 1);
-    gpio_mock_set_line_value(1, 1);
-    gpio_mock_set_line_value(2, 1);
+    setup_default_lines(true);
     TEST_ASSERT(gpio_hal->init() == 0);
 
     time_mock_set_now_ms(0);
@@ -93,10 +123,7 @@ static int test_timeout_no_event(void) {
 }
 
 static int test_gpio_fd_wakeup(void) {
-    gpio_mock_set_debounce_supported(true);
-    gpio_mock_set_line_value(0, 1);
-    gpio_mock_set_line_value(1, 1);
-    gpio_mock_set_line_value(2, 1);
+    setup_default_lines(true);
     TEST_ASSERT(gpio_hal->init() == 0);
 
     int fd = gpio_hal->get_fd();
@@ -120,13 +147,27 @@ static int test_gpio_fd_wakeup(void) {
     return 0;
 }
 
+static int test_reinit_after_cleanup(void) {
+    setup_default_lines(true);
+    TEST_ASSERT(gpio_hal->init() == 0);
+    gpio_hal->cleanup();
+
+    setup_default_lines(true);
+    TEST_ASSERT(gpio_hal->init() == 0);
+    gpio_hal->cleanup();
+    return 0;
+}
+
 int main(void) {
     int rc = 0;
     rc |= test_short_press_k1();
+    rc |= test_short_press_k2();
+    rc |= test_short_press_k3();
     rc |= test_long_press_k2();
     rc |= test_debounce_soft_fallback();
     rc |= test_timeout_no_event();
     rc |= test_gpio_fd_wakeup();
+    rc |= test_reinit_after_cleanup();
 
     if (rc == 0) {
         printf("ALL TESTS PASSED\n");

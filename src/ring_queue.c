@@ -103,6 +103,7 @@ ring_queue_result_t ring_queue_push(ring_queue_t *q, const void *item) {
         if (q->policy == RQ_OVERWRITE_OLDEST) {
             memcpy(ring_queue_item_ptr(q, q->tail), item, q->item_size);
             q->tail = (q->tail + 1) % q->capacity;
+            // 覆盖最旧元素：满队列时 head 与 tail 对齐到新位置，队列仍保持满。
             q->head = q->tail;
             q->stats.overwrites++;
             ring_queue_unlock(q);
