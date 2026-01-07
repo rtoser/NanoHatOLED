@@ -1,5 +1,5 @@
 CC ?= gcc
-CFLAGS ?= -O2 -Wall -Wextra -std=c11
+CFLAGS ?= -O2 -Wall -Wextra -std=c11 -D_POSIX_C_SOURCE=200809L -D_GNU_SOURCE
 
 INCLUDES := -I../src -I./mocks
 
@@ -78,6 +78,7 @@ test-target-gpio:
 		TARGET_DIR=$${TARGET_DIR:-/opt/target}; \
 			$$CC -I./src -I$$TARGET_DIR/usr/include -O2 -Wall \
 				-DGPIOCHIP_PATH=\"$(GPIOCHIP_PATH)\" -DBTN_OFFSETS=$(BTN_OFFSETS) \
+				-D_POSIX_C_SOURCE=200809L -D_GNU_SOURCE \
 			tests/target/test_gpio_hw.c src/hal/gpio_hal_libgpiod.c src/hal/time_hal_real.c \
 			-L$$TARGET_DIR/usr/lib -lgpiod -lpthread -o tests/target/test_gpio_hw; \
 	'
@@ -103,7 +104,8 @@ test-target-dual:
 			$$CC -I./src -I$$TARGET_DIR/usr/include -O2 -Wall -std=c11 \
 				-DGPIOCHIP_PATH=\"$(GPIOCHIP_PATH)\" -DBTN_OFFSETS=$(BTN_OFFSETS) \
 				-DTEST_IDLE_TIMEOUT_MS=$(TEST_IDLE_TIMEOUT_MS) \
-			tests/target/test_dual_thread.c \
+				-D_POSIX_C_SOURCE=200809L -D_GNU_SOURCE \
+				tests/target/test_dual_thread.c \
 			src/event_queue.c src/ring_queue.c src/event_loop.c src/ui_thread.c src/ui_controller.c \
 			src/hal/gpio_hal_libgpiod.c src/hal/time_hal_real.c \
 			-L$$TARGET_DIR/usr/lib -lgpiod -lpthread -o tests/target/test_dual_thread; \

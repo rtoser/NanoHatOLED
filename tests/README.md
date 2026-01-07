@@ -18,6 +18,13 @@ cd tests
 make test-target
 ```
 
+如果目标板上的按键连接到 `/dev/gpiochip0`（可通过 `gpiomon -l` 查询），可以覆盖参数：
+```
+make test-target GPIOCHIP_PATH=/dev/gpiochip0 BTN_OFFSETS=0,2,3
+```
+
+推荐在执行前先用 `gpiomon -c <gpiochip> 0 2 3` 验证按键输出，确保 `GPIOCHIP_PATH` 匹配。
+
 `make test-target`  将依次执行 `test_gpio_hw` 与交互式 `test_dual_thread`，不用额外手工调用 `make test-target-dual`。
 
 可覆盖 Target 参数：
