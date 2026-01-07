@@ -18,22 +18,12 @@ cd tests
 make test-target
 ```
 
-**Target（双线程验证）**：
-```
-cd tests
-make test-target-dual
-```
+`make test-target`  将依次执行 `test_gpio_hw` 与交互式 `test_dual_thread`，不用额外手工调用 `make test-target-dual`。
 
 可覆盖 Target 参数：
 ```
 make test-target TARGET=192.168.33.254 GPIOCHIP_PATH=/dev/gpiochip1 BTN_OFFSETS=0,2,3
 ```
-
-双线程验证可覆盖自动息屏等待时间：
-```
-make test-target-dual TEST_IDLE_TIMEOUT_MS=5000
-```
-
 ## 用例清单与保障范围
 
 - `test_ring_queue`

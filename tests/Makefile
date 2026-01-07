@@ -56,7 +56,11 @@ test_ui_controller: $(UI_TEST_OBJS)
 test_ui_thread_default: $(UI_THREAD_TEST_OBJS)
 	$(CC) $(CFLAGS) $(UI_THREAD_TEST_OBJS) -lpthread -o $@
 
-test-target:
+test-target: test-target-gpio test-target-dual
+
+.PHONY: test-target test-target-gpio test-target-dual
+
+test-target-gpio:
 	docker run --rm --platform linux/amd64 -v "$(PWD)/..:/work" -w /work $(DOCKER_IMAGE) sh -c '\
 		set -e; \
 		if [ -d /builder/staging_dir ]; then \

@@ -552,7 +552,7 @@ cd tests
 make test-host
 ```
 
-**Target 集成测试（GPIO）**：
+**Target 集成测试（GPIO + 双线程）**：
 ```bash
 cd tests
 make test-target TARGET=192.168.33.254 TARGET_USER=root \
@@ -560,19 +560,12 @@ make test-target TARGET=192.168.33.254 TARGET_USER=root \
   GPIOCHIP_PATH=/dev/gpiochip1 BTN_OFFSETS=0,2,3
 ```
 
-**Target 集成测试（双线程）**：
-```bash
-cd tests
-make test-target-dual TARGET=192.168.33.254 TARGET_USER=root \
-  DOCKER_IMAGE=openwrt-sdk:sunxi-cortexa53-24.10.5 \
-  GPIOCHIP_PATH=/dev/gpiochip1 BTN_OFFSETS=0,2,3 \
-  TEST_IDLE_TIMEOUT_MS=5000
-```
-
 说明：
 - `test-target` 会使用 Docker 交叉编译并上传到 `/tmp/test_gpio_hw` 后自动执行
 - 测试执行期间需要人工按键（10 秒内）
 - 建议先停止服务：`ssh root@<ip> "service nanohat-oled stop; sleep 1"`
+- `test-target` 依次运行 `test_gpio_hw` 与 `test_dual_thread`，默认覆盖 GPIO 和自动息屏链路
+- 若只想执行双线程交互，可以单独调用 `make test-target-dual ...`
 - `test-target-dual` 为交互式双线程验证，需按提示完成按键/息屏/唤醒流程
 
 ### 4.3 Mock 时间控制
@@ -621,6 +614,7 @@ jobs:
 
 ## 4.6 Target 测试流程（双线程）
 
+`make test-target`  会按顺序运行 `test_gpio_hw` 与 `test_dual_thread`，无需额外命令；若需要重跑或单独调试双线程可用：
 1. 停止服务：`ssh root@<ip> "service nanohat-oled stop; sleep 1"`
 2. 运行：`cd tests && make test-target-dual ...`
 3. 按提示完成 3 个步骤：
