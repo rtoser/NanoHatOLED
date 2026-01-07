@@ -80,7 +80,7 @@
 
 ## Phase 3 双线程（事件队列 + 主线程 + UI 线程）
 
-**状态**：进行中（事件队列与基础骨架已完成）
+**状态**：进行中（双线程链路与主入口已接入，待业务 UI/显示实现）
 
 **任务**
 - 实现事件队列的“关键事件不丢 + tick 合并”
@@ -93,30 +93,49 @@
 - Target 侧双线程验证
 
 **预计改动文件（核心）**
+- `src/main.c`
 - `src/event_queue.c`
 - `src/event_queue.h`
 - `src/event_loop.c`
 - `src/event_loop.h`
 - `src/ui_thread.c`
 - `src/ui_thread.h`
-- `src/hal/display_hal_mock.c`
+- `src/ui_controller.c`
+- `src/ui_controller.h`
+- `src/hal/display_hal_null.c`
+- `src/Makefile`
 
 **预计改动文件（测试）**
 - `tests/test_event_queue.c`
 - `tests/test_event_flow.c`
 - `tests/test_thread_safety.c`
+- `tests/test_ui_controller.c`
+- `tests/test_ui_thread_default.c`
 - `tests/mocks/display_mock.c`
 - `tests/mocks/display_mock.h`
 - `tests/target/test_dual_thread.c`
 
 **实际产出（已完成）**
+- `src/main.c`
 - `src/event_queue.c`
 - `src/event_queue.h`
 - `src/event_loop.c`
 - `src/event_loop.h`
 - `src/ui_thread.c`
 - `src/ui_thread.h`
+- `src/ui_controller.c`
+- `src/ui_controller.h`
+- `src/hal/display_hal_null.c`
+- `src/Makefile`
 - `tests/test_event_queue.c`
+- `tests/test_event_flow.c`
+- `tests/test_thread_safety.c`
+- `tests/test_ui_controller.c`
+- `tests/test_ui_thread_default.c`
+- `tests/mocks/display_mock.c`
+- `tests/mocks/display_mock.h`
+- `tests/target/test_dual_thread.c`
+- `tests/Makefile`
 
 ## Phase 4 三线程（ubus 线程 + 任务/结果队列 + uloop/eventfd）
 
@@ -146,6 +165,23 @@
 - `tests/mocks/ubus_mock.c`
 - `tests/mocks/ubus_mock.h`
 - `tests/target/test_ubus_hw.c`
+
+## 开发日志（Dev Log）
+
+### 2026-01-07：交叉编译失败排查记录
+
+**现象**：
+- `main.c` 编译时报 `struct sigaction` 未知、`sigaction/sigemptyset` 隐式声明
+- `time_hal_real.c` / `event_loop.c` / `event_queue.c` 报 `CLOCK_MONOTONIC/CLOCK_REALTIME` 未声明
+- 链接报 `event_loop.o: file format not recognized`
+
+**原因**：
+1) OpenWrt SDK 的 musl 头文件默认不暴露部分 POSIX API，需要在包含头文件前定义功能宏。  
+2) 复用本地编译生成的 `.o`（宿主机格式）进行交叉链接，导致目标架构不匹配。
+
+**修复**：
+- 在相关源文件顶部添加 `#define _POSIX_C_SOURCE 200809L`（`event_loop.c` 额外加 `_GNU_SOURCE`），再包含头文件。  
+- `build_in_docker.sh` 中在 `make` 前执行 `make clean`，避免混用宿主机对象文件。
 
 ## Phase 5 集成与替换（新 main + 全流程联调）
 

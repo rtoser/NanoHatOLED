@@ -18,9 +18,20 @@ cd tests
 make test-target
 ```
 
+**Target（双线程验证）**：
+```
+cd tests
+make test-target-dual
+```
+
 可覆盖 Target 参数：
 ```
 make test-target TARGET=192.168.33.254 GPIOCHIP_PATH=/dev/gpiochip1 BTN_OFFSETS=0,2,3
+```
+
+双线程验证可覆盖自动息屏等待时间：
+```
+make test-target-dual TEST_IDLE_TIMEOUT_MS=5000
 ```
 
 ## 用例清单与保障范围
@@ -60,7 +71,13 @@ make test-target TARGET=192.168.33.254 GPIOCHIP_PATH=/dev/gpiochip1 BTN_OFFSETS=
   - 基于 libgpiod 的硬件按键验证
   - 设备侧人工按键确认
 
+- `test_dual_thread`（仅 Target）
+  - 双线程事件循环联调（event_loop + ui_thread + gpio_hal）
+  - 按键输入、自动息屏、唤醒流程验证
+  - 事件循环退出与资源清理
+
 ## 注意事项
 
 - `test_event_flow` 依赖 eventfd/timerfd，非 Linux 环境会自动跳过。
 - Target 测试前请停止 `nanohat-oled` 服务，避免 GPIO 被占用。
+- `test_dual_thread` 为交互式用例，请按提示完成按键、等待息屏与唤醒步骤。

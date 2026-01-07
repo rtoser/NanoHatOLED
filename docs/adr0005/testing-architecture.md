@@ -40,7 +40,7 @@
 
 - Phase 1 与 Phase 2 已完成 Host Mock 测试
 - Host 运行：`cd tests && make test-host`（执行 `test_ring_queue` 与 `test_gpio_button`）
-- Target 侧已有 `tests/target/test_gpio_hw.c`，`tests/Makefile` 提供 `test-target`
+- Target 侧已有 `tests/target/test_gpio_hw.c` 与 `tests/target/test_dual_thread.c`，`tests/Makefile` 提供 `test-target`/`test-target-dual`
 
 ## 2. 硬件抽象层 (HAL)
 
@@ -560,10 +560,20 @@ make test-target TARGET=192.168.33.254 TARGET_USER=root \
   GPIOCHIP_PATH=/dev/gpiochip1 BTN_OFFSETS=0,2,3
 ```
 
+**Target 集成测试（双线程）**：
+```bash
+cd tests
+make test-target-dual TARGET=192.168.33.254 TARGET_USER=root \
+  DOCKER_IMAGE=openwrt-sdk:sunxi-cortexa53-24.10.5 \
+  GPIOCHIP_PATH=/dev/gpiochip1 BTN_OFFSETS=0,2,3 \
+  TEST_IDLE_TIMEOUT_MS=5000
+```
+
 说明：
 - `test-target` 会使用 Docker 交叉编译并上传到 `/tmp/test_gpio_hw` 后自动执行
 - 测试执行期间需要人工按键（10 秒内）
 - 建议先停止服务：`ssh root@<ip> "service nanohat-oled stop; sleep 1"`
+- `test-target-dual` 为交互式双线程验证，需按提示完成按键/息屏/唤醒流程
 
 ### 4.3 Mock 时间控制
 
@@ -608,6 +618,16 @@ jobs:
 4. 若失败，先用 `gpiomon` 确认映射：
    - `gpiomon -c gpiochip1 -e both --idle-timeout 10s 0 2 3`
    - 注意参数顺序：选项在前，line 在后
+
+## 4.6 Target 测试流程（双线程）
+
+1. 停止服务：`ssh root@<ip> "service nanohat-oled stop; sleep 1"`
+2. 运行：`cd tests && make test-target-dual ...`
+3. 按提示完成 3 个步骤：
+   - 10 秒内按任意键（验证事件链路）
+   - 保持无按键，等待自动息屏
+   - 再按任意键唤醒
+4. 看到 `TEST PASSED` 结束；失败会提示具体阶段
 
 ## 5. 开发工作流
 
@@ -655,6 +675,7 @@ make release && ./deploy.sh
 
 # Target 测试
 make test-target
+make test-target-dual
 ```
 
 ---

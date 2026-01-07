@@ -12,11 +12,14 @@
 
 ```
 src/
+├── main.c              # 主入口（事件循环 + UI 线程）
+├── Makefile            # 编译入口（生成 nanohat-oled）
 ├── hal/                 # 硬件抽象层
 │   ├── gpio_hal.h
 │   ├── gpio_hal_libgpiod.c
 │   ├── gpio_hal_mock.c
 │   ├── display_hal.h
+│   ├── display_hal_null.c
 │   ├── ubus_hal.h
 │   ├── time_hal.h
 │   └── time_hal_real.c
@@ -39,6 +42,8 @@ docker run --rm --platform linux/amd64 -v "$(pwd)/src:/src" openwrt-sdk:sunxi-co
 ```
 
 > 当前重实现尚未完成，`build_in_docker.sh` 会要求 `Makefile` 或 `CMakeLists.txt` 存在后才可编译。
+
+当前已提供 `Makefile`，默认链接 `display_hal_null.c`（无显示输出），后续接入真实显示 HAL 时可替换链接文件。
 
 ## 部署（示例）
 

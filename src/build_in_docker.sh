@@ -39,6 +39,7 @@ if [ -f CMakeLists.txt ]; then
         -DCMAKE_FIND_ROOT_PATH="$TARGET_DIR"
     cmake --build build
 elif [ -f Makefile ]; then
+    make clean
     make CC="$CC" TARGET_DIR="$TARGET_DIR"
 else
     echo "Error: No build system found (Makefile/CMakeLists.txt)"
