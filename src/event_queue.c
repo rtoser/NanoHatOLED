@@ -24,7 +24,8 @@ static bool event_queue_merge_tick(void *existing, const void *incoming, void *u
     if (ex->type != EVT_TICK) {
         return false;
     }
-    *ex = *in;
+    ex->data += in->data;
+    ex->timestamp_ns = in->timestamp_ns;
     return true;
 }
 

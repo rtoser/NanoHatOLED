@@ -180,6 +180,9 @@ loop:
 - 使用 `ui_controller` 处理事件并渲染。
 - 按键事件触发短动画：请求 `event_loop_request_tick(50ms)`，计数 10 次后关闭 tick。
 - K2 短按关闭电源时，立即关闭 tick。
+- 自动息屏：若持续无按键输入超过 30s，则关闭屏幕；任意按键事件会唤醒并重置计时。
+- 空闲检测使用 1s 低频 tick（默认启动），动画结束后回落到 idle tick。
+- 自动息屏逻辑位于 `ui_controller`，由 tick 的时间戳驱动。
 
 ---
 

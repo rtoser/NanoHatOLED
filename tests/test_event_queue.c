@@ -11,12 +11,12 @@
     } \
 } while (0)
 
-static app_event_t make_tick(uint64_t ts) {
+static app_event_t make_tick(uint64_t ts, uint32_t data) {
     app_event_t evt = {
         .type = EVT_TICK,
         .line = 0,
         .timestamp_ns = ts,
-        .data = 0
+        .data = data
     };
     return evt;
 }
@@ -35,8 +35,8 @@ static int test_tick_merge(void) {
     event_queue_t q;
     TEST_ASSERT(event_queue_init(&q, 4) == 0);
 
-    app_event_t t1 = make_tick(100);
-    app_event_t t2 = make_tick(200);
+    app_event_t t1 = make_tick(100, 1);
+    app_event_t t2 = make_tick(200, 2);
 
     TEST_ASSERT(event_queue_push(&q, &t1) == EQ_RESULT_OK);
     TEST_ASSERT(event_queue_push(&q, &t2) == EQ_RESULT_OK);
@@ -45,6 +45,7 @@ static int test_tick_merge(void) {
     TEST_ASSERT(event_queue_try_pop(&q, &out) == 1);
     TEST_ASSERT(out.type == EVT_TICK);
     TEST_ASSERT(out.timestamp_ns == 200);
+    TEST_ASSERT(out.data == 3);
 
     event_queue_destroy(&q);
     return 0;
@@ -54,8 +55,8 @@ static int test_critical_replaces_tick(void) {
     event_queue_t q;
     TEST_ASSERT(event_queue_init(&q, 2) == 0);
 
-    app_event_t t1 = make_tick(100);
-    app_event_t t2 = make_tick(200);
+    app_event_t t1 = make_tick(100, 1);
+    app_event_t t2 = make_tick(200, 1);
     TEST_ASSERT(event_queue_push(&q, &t1) == EQ_RESULT_OK);
     TEST_ASSERT(event_queue_push(&q, &t2) == EQ_RESULT_OK);
 

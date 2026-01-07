@@ -11,6 +11,8 @@ typedef struct {
     app_event_type_t last_event;
     uint64_t tick_count;
     bool needs_render;
+    uint64_t last_input_ns;
+    uint32_t idle_timeout_ms;
 } ui_controller_t;
 
 void ui_controller_init(ui_controller_t *ui);

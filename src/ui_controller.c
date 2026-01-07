@@ -19,6 +19,8 @@ static const char *event_name(app_event_type_t type) {
     }
 }
 
+#define UI_AUTO_SLEEP_MS_DEFAULT 30000
+
 void ui_controller_init(ui_controller_t *ui) {
     if (!ui) {
         return;
@@ -28,6 +30,8 @@ void ui_controller_init(ui_controller_t *ui) {
     ui->last_event = EVT_NONE;
     ui->tick_count = 0;
     ui->needs_render = true;
+    ui->last_input_ns = 0;
+    ui->idle_timeout_ms = UI_AUTO_SLEEP_MS_DEFAULT;
 }
 
 void ui_controller_handle_event(ui_controller_t *ui, const app_event_t *event) {
@@ -40,10 +44,28 @@ void ui_controller_handle_event(ui_controller_t *ui, const app_event_t *event) {
     if (event->type == EVT_TICK) {
         uint32_t step = event->data ? event->data : 1;
         ui->tick_count += step;
+        if (ui->last_input_ns == 0) {
+            ui->last_input_ns = event->timestamp_ns;
+        }
+        if (ui->power_on && ui->idle_timeout_ms > 0) {
+            uint64_t idle_ns = event->timestamp_ns - ui->last_input_ns;
+            if (idle_ns >= (uint64_t)ui->idle_timeout_ms * 1000000ULL) {
+                ui->power_on = false;
+            }
+        }
     } else if (event->type == EVT_BTN_K2_SHORT) {
+        // K2 短按为电源开关独立逻辑。
         ui->power_on = !ui->power_on;
+        ui->last_input_ns = event->timestamp_ns;
     } else if (event->type == EVT_SHUTDOWN) {
         ui->power_on = false;
+    } else if (event->type == EVT_BTN_K1_SHORT || event->type == EVT_BTN_K1_LONG ||
+               event->type == EVT_BTN_K3_SHORT || event->type == EVT_BTN_K3_LONG ||
+               event->type == EVT_BTN_K2_LONG) {
+        ui->last_input_ns = event->timestamp_ns;
+        if (!ui->power_on) {
+            ui->power_on = true;
+        }
     }
 
     ui->needs_render = true;

@@ -178,7 +178,7 @@ tests/
 | `test_event_queue` | tick 合并与关键事件兜底 |
 | `test_thread_safety` | event_queue 并发 push/pop |
 | `test_event_flow` | 事件循环与 UI 线程基础链路（Linux 下） |
-| `test_ui_controller` | UI 事件处理与显示渲染基础行为 |
+| `test_ui_controller` | UI 事件处理/渲染、唤醒时间戳与自动息屏 |
 | `test_ui_thread_default` | ui_thread 默认 handler 集成路径 |
 
 **Mock 能力**:

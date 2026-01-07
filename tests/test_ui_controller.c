@@ -57,10 +57,142 @@ static int test_tick_updates_text(void) {
     return 0;
 }
 
+static int test_wake_on_keypress(void) {
+    ui_controller_t ui;
+    ui_controller_init(&ui);
+    ui.power_on = false;
+
+    app_event_t evt = {
+        .type = EVT_BTN_K1_SHORT,
+        .line = 0,
+        .timestamp_ns = 123,
+        .data = 0
+    };
+
+    ui_controller_handle_event(&ui, &evt);
+    TEST_ASSERT(ui.power_on == true);
+    TEST_ASSERT(ui.last_input_ns == 123);
+
+    return 0;
+}
+
+static int test_k2_toggle_off(void) {
+    ui_controller_t ui;
+    ui_controller_init(&ui);
+
+    app_event_t evt = {
+        .type = EVT_BTN_K2_SHORT,
+        .line = 1,
+        .timestamp_ns = 500,
+        .data = 0
+    };
+
+    ui_controller_handle_event(&ui, &evt);
+    TEST_ASSERT(ui.power_on == false);
+    TEST_ASSERT(ui.last_input_ns == 500);
+
+    return 0;
+}
+
+static int test_k2_toggle_on(void) {
+    ui_controller_t ui;
+    ui_controller_init(&ui);
+    ui.power_on = false;
+
+    app_event_t evt = {
+        .type = EVT_BTN_K2_SHORT,
+        .line = 1,
+        .timestamp_ns = 600,
+        .data = 0
+    };
+
+    ui_controller_handle_event(&ui, &evt);
+    TEST_ASSERT(ui.power_on == true);
+    TEST_ASSERT(ui.last_input_ns == 600);
+
+    return 0;
+}
+
+static int test_idle_exact_boundary(void) {
+    ui_controller_t ui;
+    ui_controller_init(&ui);
+    ui.idle_timeout_ms = 100;
+
+    app_event_t press = {
+        .type = EVT_BTN_K1_SHORT,
+        .line = 0,
+        .timestamp_ns = 1000,
+        .data = 0
+    };
+    ui_controller_handle_event(&ui, &press);
+    TEST_ASSERT(ui.power_on == true);
+
+    app_event_t tick = {
+        .type = EVT_TICK,
+        .line = 0,
+        .timestamp_ns = 1000 + (uint64_t)ui.idle_timeout_ms * 1000000ULL,
+        .data = 1
+    };
+    ui_controller_handle_event(&ui, &tick);
+    TEST_ASSERT(ui.power_on == false);
+
+    return 0;
+}
+
+static int test_idle_init_from_tick(void) {
+    ui_controller_t ui;
+    ui_controller_init(&ui);
+    ui.idle_timeout_ms = 100;
+
+    app_event_t tick = {
+        .type = EVT_TICK,
+        .line = 0,
+        .timestamp_ns = 2000,
+        .data = 1
+    };
+    ui_controller_handle_event(&ui, &tick);
+    TEST_ASSERT(ui.last_input_ns == 2000);
+    TEST_ASSERT(ui.power_on == true);
+
+    return 0;
+}
+
+static int test_auto_sleep(void) {
+    ui_controller_t ui;
+    ui_controller_init(&ui);
+    ui.idle_timeout_ms = 100;
+
+    app_event_t press = {
+        .type = EVT_BTN_K1_SHORT,
+        .line = 0,
+        .timestamp_ns = 1000,
+        .data = 0
+    };
+    ui_controller_handle_event(&ui, &press);
+    TEST_ASSERT(ui.power_on == true);
+
+    app_event_t tick = {
+        .type = EVT_TICK,
+        .line = 0,
+        .timestamp_ns = 1000 + (uint64_t)ui.idle_timeout_ms * 1000000ULL + 1,
+        .data = 1
+    };
+    ui_controller_handle_event(&ui, &tick);
+    TEST_ASSERT(ui.power_on == false);
+
+    return 0;
+}
+
 int main(void) {
     int rc = 0;
     rc |= test_render_on_event();
     rc |= test_tick_updates_text();
+    rc |= test_wake_on_keypress();
+    rc |= test_k2_toggle_off();
+    rc |= test_k2_toggle_on();
+    rc |= test_idle_exact_boundary();
+    rc |= test_idle_init_from_tick();
+    rc |= test_auto_sleep();
 
     if (rc == 0) {
         printf("ALL TESTS PASSED\n");
