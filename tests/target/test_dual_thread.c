@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include <pthread.h>
 #include <signal.h>
 #include <stdatomic.h>
