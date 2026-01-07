@@ -2,6 +2,9 @@ CC ?= gcc
 CFLAGS ?= -O2 -Wall -Wextra -std=c11
 
 TARGET_DIR ?= /opt/target
+BUILD_DIR ?= build/target
+OBJ_DIR := $(BUILD_DIR)/obj
+BIN_DIR := $(BUILD_DIR)/bin
 GPIOCHIP_PATH ?= /dev/gpiochip1
 BTN_OFFSETS ?= 0,2,3
 
@@ -21,18 +24,20 @@ SRCS := \
 	hal/time_hal_real.c \
 	hal/display_hal_null.c
 
-OBJS := $(SRCS:.c=.o)
-BIN := nanohat-oled
+OBJS := $(SRCS:%.c=$(OBJ_DIR)/%.o)
+BIN := $(BIN_DIR)/nanohat-oled
 
 all: $(BIN)
 
 $(BIN): $(OBJS)
+	@mkdir -p "$(BIN_DIR)"
 	$(CC) $(CFLAGS) $(OBJS) -L$(TARGET_DIR)/usr/lib $(LDFLAGS) -o $@
 
-%.o: %.c
+$(OBJ_DIR)/%.o: %.c
+	@mkdir -p "$(dir $@)"
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(OBJS) $(BIN)
+	rm -rf "$(BUILD_DIR)"
 
 .PHONY: all clean

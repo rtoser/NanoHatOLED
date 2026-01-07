@@ -14,6 +14,9 @@ if [ -d "/builder/staging_dir" ]; then
 fi
 
 # Auto-detect compiler (OpenWrt SDK or generic musl toolchain)
+BUILD_DIR=${BUILD_DIR:-build/target}
+export BUILD_DIR
+
 if command -v aarch64-openwrt-linux-musl-gcc >/dev/null 2>&1; then
     CC=aarch64-openwrt-linux-musl-gcc
 elif command -v aarch64-linux-musl-gcc >/dev/null 2>&1; then
@@ -39,8 +42,8 @@ if [ -f CMakeLists.txt ]; then
         -DCMAKE_FIND_ROOT_PATH="$TARGET_DIR"
     cmake --build build
 elif [ -f Makefile ]; then
-    make clean
-    make CC="$CC" TARGET_DIR="$TARGET_DIR"
+    make clean BUILD_DIR="$BUILD_DIR"
+    make BUILD_DIR="$BUILD_DIR" CC="$CC" TARGET_DIR="$TARGET_DIR"
 else
     echo "Error: No build system found (Makefile/CMakeLists.txt)"
     exit 1
