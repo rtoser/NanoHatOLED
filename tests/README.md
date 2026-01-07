@@ -1,0 +1,60 @@
+# 测试说明
+
+本目录包含轻量级 C 测试用例，使用项目自带的 Makefile 构建，**不依赖外部测试框架**。每个测试程序成功返回 0，并输出 `ALL TESTS PASSED`。
+
+> 更完整的测试策略与阶段性目标见：`../docs/adr0005/testing-architecture.md`
+
+## 运行方式
+
+**Host（基于 Mock）**：
+```
+cd tests
+make test-host
+```
+
+**Target（交叉编译 + 设备运行）**：
+```
+cd tests
+make test-target
+```
+
+可覆盖 Target 参数：
+```
+make test-target TARGET=192.168.33.254 GPIOCHIP_PATH=/dev/gpiochip1 BTN_OFFSETS=0,2,3
+```
+
+## 用例清单与保障范围
+
+- `test_ring_queue`
+  - ring_queue 初始化 / 入队 / 出队
+  - 覆盖 / 拒绝 / 合并策略
+  - 合并函数行为
+
+- `test_gpio_button`
+  - K1/K2/K3 短按
+  - 长按（松开时判定）
+  - 去抖 fallback（软去抖路径）
+  - 超时返回
+  - `get_fd()` poll 唤醒一致性
+  - cleanup 后 reinit
+
+- `test_event_queue`
+  - tick 合并
+  - 队列满时关键事件替换 tick
+  - wait 超时与 close 唤醒
+
+- `test_thread_safety`
+  - event_queue 并发 push/pop 压测
+
+- `test_event_flow`（仅 Linux）
+  - event_loop + ui_thread 基础链路
+  - tick 启用与 shutdown 投递
+
+- `test_gpio_hw`（仅 Target）
+  - 基于 libgpiod 的硬件按键验证
+  - 设备侧人工按键确认
+
+## 注意事项
+
+- `test_event_flow` 依赖 eventfd/timerfd，非 Linux 环境会自动跳过。
+- Target 测试前请停止 `nanohat-oled` 服务，避免 GPIO 被占用。

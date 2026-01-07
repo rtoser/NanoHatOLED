@@ -1,5 +1,7 @@
 # 测试架构设计
 
+> 用例清单与运行方式详见：`../../tests/README.md`
+
 *   **版本**: 1.0
 *   **日期**: 2026-01-05
 *   **关联**: ADR 0005 (终极三线程架构)
@@ -173,6 +175,9 @@ tests/
 | `test_timeout_no_event` | 超时返回 BTN_NONE |
 | `test_rapid_presses` | 快速连续按键 |
 | `test_gpio_fd_wakeup` | `get_fd()` 可被 poll 唤醒并与 `wait_event()` 一致 |
+| `test_event_queue` | tick 合并与关键事件兜底 |
+| `test_thread_safety` | event_queue 并发 push/pop |
+| `test_event_flow` | 事件循环与 UI 线程基础链路（Linux 下） |
 
 **Mock 能力**:
 ```c

@@ -20,6 +20,7 @@
 ## 设计规格
 
 - [Phase 1-2 实现设计](../design/phase1-2-implementation.md)
+- [Phase 3 事件循环与 UI 线程设计](../design/phase3-event-loop-and-ui.md)
 
 ## 当前进度
 

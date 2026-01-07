@@ -20,6 +20,7 @@ typedef enum {
 } ring_queue_result_t;
 
 typedef bool (*ring_queue_merge_fn)(void *existing, const void *incoming, void *user);
+typedef bool (*ring_queue_match_fn)(const void *item, void *user);
 
 typedef struct {
     uint64_t pushes;
@@ -51,6 +52,7 @@ void ring_queue_set_merge_fn(ring_queue_t *q, ring_queue_merge_fn fn, void *user
 
 ring_queue_result_t ring_queue_push(ring_queue_t *q, const void *item);
 bool ring_queue_pop(ring_queue_t *q, void *out);
+bool ring_queue_replace_first_if(ring_queue_t *q, ring_queue_match_fn match, void *user, const void *item);
 
 size_t ring_queue_count(ring_queue_t *q);
 size_t ring_queue_capacity(ring_queue_t *q);

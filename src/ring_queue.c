@@ -141,6 +141,31 @@ bool ring_queue_pop(ring_queue_t *q, void *out) {
     return true;
 }
 
+bool ring_queue_replace_first_if(ring_queue_t *q, ring_queue_match_fn match, void *user, const void *item) {
+    if (!q || !match || !item || !q->buffer) {
+        return false;
+    }
+
+    ring_queue_lock(q);
+    if (q->count == 0) {
+        ring_queue_unlock(q);
+        return false;
+    }
+
+    for (size_t i = 0; i < q->count; i++) {
+        size_t idx = (q->head + i) % q->capacity;
+        void *existing = ring_queue_item_ptr(q, idx);
+        if (match(existing, user)) {
+            memcpy(existing, item, q->item_size);
+            ring_queue_unlock(q);
+            return true;
+        }
+    }
+
+    ring_queue_unlock(q);
+    return false;
+}
+
 size_t ring_queue_count(ring_queue_t *q) {
     if (!q) {
         return 0;

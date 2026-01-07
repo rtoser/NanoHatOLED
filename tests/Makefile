@@ -5,9 +5,15 @@ INCLUDES := -I../src -I./mocks
 
 RING_TEST_SRCS := test_ring_queue.c
 GPIO_TEST_SRCS := test_gpio_button.c mocks/time_mock.c
+EVENT_TEST_SRCS := test_event_queue.c
+FLOW_TEST_SRCS := test_event_flow.c mocks/time_mock.c
+THREAD_TEST_SRCS := test_thread_safety.c
 
 RING_TEST_OBJS := $(RING_TEST_SRCS:.c=.o) ../src/ring_queue.o
 GPIO_TEST_OBJS := $(GPIO_TEST_SRCS:.c=.o) ../src/hal/gpio_hal_mock.o
+EVENT_TEST_OBJS := $(EVENT_TEST_SRCS:.c=.o) ../src/event_queue.o ../src/ring_queue.o
+FLOW_TEST_OBJS := $(FLOW_TEST_SRCS:.c=.o) ../src/event_loop.o ../src/event_queue.o ../src/ui_thread.o ../src/ring_queue.o
+THREAD_TEST_OBJS := $(THREAD_TEST_SRCS:.c=.o) ../src/event_queue.o ../src/ring_queue.o
 
 DOCKER_IMAGE ?= openwrt-sdk:sunxi-cortexa53-24.10.5
 TARGET ?= 192.168.33.254
@@ -15,15 +21,27 @@ TARGET_USER ?= root
 GPIOCHIP_PATH ?= /dev/gpiochip1
 BTN_OFFSETS ?= 0,2,3
 
-test-host: test_ring_queue test_gpio_button
+test-host: test_ring_queue test_gpio_button test_event_queue test_event_flow test_thread_safety
 	./test_ring_queue
 	./test_gpio_button
+	./test_event_queue
+	./test_event_flow
+	./test_thread_safety
 
 test_ring_queue: $(RING_TEST_OBJS)
 	$(CC) $(CFLAGS) $(RING_TEST_OBJS) -lpthread -o $@
 
 test_gpio_button: $(GPIO_TEST_OBJS)
 	$(CC) $(CFLAGS) $(GPIO_TEST_OBJS) -lpthread -o $@
+
+test_event_queue: $(EVENT_TEST_OBJS)
+	$(CC) $(CFLAGS) $(EVENT_TEST_OBJS) -lpthread -o $@
+
+test_event_flow: $(FLOW_TEST_OBJS)
+	$(CC) $(CFLAGS) $(FLOW_TEST_OBJS) -lpthread -o $@
+
+test_thread_safety: $(THREAD_TEST_OBJS)
+	$(CC) $(CFLAGS) $(THREAD_TEST_OBJS) -lpthread -o $@
 
 test-target:
 	docker run --rm --platform linux/amd64 -v "$(PWD)/..:/work" -w /work $(DOCKER_IMAGE) sh -c '\
@@ -56,4 +74,6 @@ test-target:
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 clean:
-	rm -f $(RING_TEST_SRCS:.c=.o) $(GPIO_TEST_SRCS:.c=.o) ../src/*.o ../src/hal/*.o test_ring_queue test_gpio_button
+	rm -f $(RING_TEST_SRCS:.c=.o) $(GPIO_TEST_SRCS:.c=.o) $(EVENT_TEST_SRCS:.c=.o) \
+		$(FLOW_TEST_SRCS:.c=.o) $(THREAD_TEST_SRCS:.c=.o) \
+		../src/*.o ../src/hal/*.o test_ring_queue test_gpio_button test_event_queue test_event_flow test_thread_safety

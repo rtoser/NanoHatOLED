@@ -80,6 +80,8 @@
 
 ## Phase 3 双线程（事件队列 + 主线程 + UI 线程）
 
+**状态**：进行中（事件队列与基础骨架已完成）
+
 **任务**
 - 实现事件队列的“关键事件不丢 + tick 合并”
 - 主线程 `poll()` 监听 gpiod/timerfd/eventfd
@@ -106,6 +108,15 @@
 - `tests/mocks/display_mock.c`
 - `tests/mocks/display_mock.h`
 - `tests/target/test_dual_thread.c`
+
+**实际产出（已完成）**
+- `src/event_queue.c`
+- `src/event_queue.h`
+- `src/event_loop.c`
+- `src/event_loop.h`
+- `src/ui_thread.c`
+- `src/ui_thread.h`
+- `tests/test_event_queue.c`
 
 ## Phase 4 三线程（ubus 线程 + 任务/结果队列 + uloop/eventfd）
 
