@@ -35,7 +35,7 @@ make test-host
 
 使用 OpenWrt SDK 镜像：
 ```bash
-docker run --rm -v "$(pwd)/src:/src" openwrt-sdk:sunxi-cortexa53-24.10.5 sh /src/build_in_docker.sh
+docker run --rm --platform linux/amd64 -v "$(pwd)/src:/src" openwrt-sdk:sunxi-cortexa53-24.10.5 sh /src/build_in_docker.sh
 ```
 
 > 当前重实现尚未完成，`build_in_docker.sh` 会要求 `Makefile` 或 `CMakeLists.txt` 存在后才可编译。

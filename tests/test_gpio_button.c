@@ -82,6 +82,7 @@ static int test_long_press_k2(void) {
     time_mock_set_now_ms(0);
     gpio_mock_inject_edge(1, EDGE_FALLING, ms_to_ns(0));
     time_mock_set_now_ms(600);
+    gpio_mock_inject_edge(1, EDGE_RISING, ms_to_ns(600));
 
     gpio_event_t evt;
     int ret = gpio_hal->wait_event(10, &evt);
@@ -142,7 +143,7 @@ static int test_gpio_fd_wakeup(void) {
     gpio_event_t evt;
     int ret = gpio_hal->wait_event(100, &evt);
     TEST_ASSERT(ret == 1);
-    TEST_ASSERT(evt.type == GPIO_EVT_BTN_K3_SHORT || evt.type == GPIO_EVT_BTN_K3_LONG);
+    TEST_ASSERT(evt.type == GPIO_EVT_BTN_K3_SHORT);
     gpio_hal->cleanup();
     return 0;
 }

@@ -35,6 +35,7 @@ RUN make package/feeds/base/ubus/compile V=s -j1 && \
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential ccache curl gawk python3-dev unzip wget \
     ca-certificates vim tree wget curl git vim tree file zstd \
     rsync cmake libncurses-dev \
     && rm -rf /var/lib/apt/lists/*

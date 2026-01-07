@@ -233,7 +233,7 @@ procd_set_param respawn 3600 5 5
 | **已废弃** | Linux 4.8 起 sysfs GPIO 被标记 deprecated | 未来内核可能移除 |
 | **竞态条件** | export 后需 `usleep(100ms)` 等待 sysfs 节点就绪 | 初始化不可靠 |
 | **全局命名空间** | GPIO 编号是系统全局的 | 与其他程序冲突风险 |
-| **无事件时间戳** | poll 返回时才取时间，非内核级 | 长按检测精度受 poll 超时影响 |
+| **无事件时间戳** | poll 返回时才取时间，非内核级 | 按键时长测量精度受影响 |
 | **性能开销** | 每次读取需 `lseek` + `read` | 微秒级开销（可接受） |
 | **ABI 不稳定** | 内核/设备树变更可能改变 GPIO 编号 | 硬编码 GPIO 0/2/3 有风险 |
 
@@ -347,8 +347,8 @@ button_event_t gpio_button_wait(int timeout_ms) {
     // Wait for edge events
     int ret = gpiod_line_request_wait_edge_events(request, timeout_ns);
     if (ret <= 0) {
-        // timeout or error - check long press
-        return check_long_press();
+        // timeout or error
+        return BTN_NONE;
     }
 
     // Read events

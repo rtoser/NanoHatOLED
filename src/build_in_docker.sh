@@ -1,6 +1,9 @@
 #!/bin/sh
 set -e
 
+# Change to script's directory (the source directory)
+cd "$(dirname "$0")"
+
 # Auto-detect OpenWrt SDK paths in /builder
 if [ -d "/builder/staging_dir" ]; then
     TOOLCHAIN_DIR=$(find /builder/staging_dir -maxdepth 1 -type d -name "toolchain-*" | head -1)

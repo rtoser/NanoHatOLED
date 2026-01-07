@@ -292,18 +292,17 @@ wait_event(timeout_ms)
     │
     ▼
 ┌─ 计算 effective_timeout ─────────────┐
-│  考虑长按检测剩余时间                 │
-│  考虑用户 timeout                     │
+│  仅考虑用户 timeout                   │
 └──────────────────────────────────────┘
     │
     ▼
 ┌─ poll(gpiod_fd, effective_timeout) ──┐
 │  可读 → 读取边沿事件                  │
-│  超时 → 检查长按                      │
+│  超时 → 返回无事件                    │
 └──────────────────────────────────────┘
     │
     ▼
-处理边沿事件 → 更新按键状态 → 生成高层事件
+处理边沿事件 → 在松开时判定短/长按 → 生成高层事件
 ```
 
 #### 核心状态机
@@ -313,14 +312,10 @@ wait_event(timeout_ms)
     IDLE ─────────────────────────► PRESSED
       ▲                                 │
       │                                 │
-      │         < 600ms                 │ >= 600ms
+      │    release (< 600ms)            │ release (>= 600ms)
+      ├──────────────── SHORT ◄─────────┤
       │                                 │
-      │    release                      ▼
-      ├──────────────── SHORT ◄──── PRESSED
-      │                                 │
-      │                                 │ (仍按住)
-      │    release                      ▼
-      └──────────────── (忽略) ◄──── LONG_REPORTED
+      └──────────────── LONG ◄──────────┘
 ```
 
 ### 4.3 Mock 实现
@@ -377,6 +372,9 @@ void test_long_press_detection(void) {
 
     // 推进时间 600ms
     time_mock_advance_ms(600);
+
+    // 注入松开事件（长按在松开时判定）
+    gpio_mock_inject_edge(1, EDGE_RISING, 600000000ULL);
 
     // 等待事件
     gpio_event_t evt;

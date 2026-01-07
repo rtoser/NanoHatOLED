@@ -197,6 +197,9 @@ void test_long_press_detection(void) {
     // 时间推进 600ms
     time_mock_advance_ms(600);
 
+    // 模拟松开（长按在松开时判定）
+    gpio_mock_inject_edge(2, EDGE_RISING, 600000000ULL);
+
     // 检查长按事件
     gpio_event_t evt;
     int ret = gpio_hal->wait_event(100, &evt);
@@ -213,7 +216,7 @@ void test_long_press_detection(void) {
 | `test_k1_hw` | 手动按 K1 | 检测到 K1 事件 |
 | `test_k2_hw` | 手动按 K2 | 检测到 K2 事件 |
 | `test_k3_hw` | 手动按 K3 | 检测到 K3 事件 |
-| `test_long_press_hw` | 按住 K2 > 1s | 检测到长按事件 |
+| `test_long_press_hw` | 按住 K2 > 1s 后松开 | 检测到长按事件 |
 | `test_gpio_fd_pollable` | 获取 fd 并 poll | fd 有效且可 poll |
 
 **Target 测试程序**:

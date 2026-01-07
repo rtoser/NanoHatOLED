@@ -69,7 +69,7 @@ int ret = poll(pfd, 3, timeout_ms);
 
 **策略**：
 - 只在**松开**时上报短按事件，避免长按被误判为短按
-- 按下后持续计时，达到阈值先上报长按，松开时不再上报短按
+- 按下后记录时间，松开时根据持续时长判定短/长按
 - 若仅捕获到松开中断且当前未处于按下状态，则视为一次快速短按
 
 #### 方案二：`edge="falling"`（已弃用）
@@ -86,9 +86,9 @@ int ret = poll(pfd, 3, timeout_ms);
 
 1. 按下中断发生时记录时间戳
 2. 通过 `btn_pressed[]` 数组跟踪按下状态
-3. 每次 `gpio_button_wait()` 调用时检查按键是否仍被按住：
-   - 若持续 >= 600ms，报告长按事件
-4. 松开时若未报告长按，则上报短按事件
+3. 松开时计算持续时长：
+   - 持续 >= 600ms，报告长按
+   - 否则报告短按
 
 ```c
 #define LONG_PRESS_MS 600
@@ -96,19 +96,13 @@ int ret = poll(pfd, 3, timeout_ms);
 // 按下中断时：
 btn_pressed[i] = true;
 btn_press_time[i] = now;
-btn_long_reported[i] = false;
 
-// 后续调用时检查长按：
-if (btn_pressed[i] && !btn_long_reported[i]) {
+// 松开时判定短/长按：
+if (btn_pressed[i] && !currently_pressed) {
+    btn_pressed[i] = false;
     if (now - btn_press_time[i] >= LONG_PRESS_MS) {
-        btn_long_reported[i] = true;
         return BTN_K1_LONG_PRESS + i;
     }
-}
-
-// 松开时若未报告长按，则视为短按：
-if (btn_pressed[i] && !currently_pressed && !btn_long_reported[i]) {
-    btn_pressed[i] = false;
     return BTN_K1_PRESS + i;
 }
 ```
@@ -159,9 +153,8 @@ if (btn_pressed[i] && !currently_pressed && !btn_long_reported[i]) {
 
 ### 状态机模板（简化）
 - IDLE →（按下沿）→ PRESSED  
-- PRESSED →（达到长按阈值且仍按住）→ LONG_SENT  
-- PRESSED →（松开沿）→ SHORT  
-- LONG_SENT →（松开沿）→ IDLE
+- PRESSED →（松开沿，< 600ms）→ SHORT  
+- PRESSED →（松开沿，>= 600ms）→ LONG
 
 ### 去抖建议
 - 即使有 RC 去抖，仍建议保留 10–30ms 的软件去抖窗口，避免阈值附近抖动导致多次边沿。
@@ -196,9 +189,9 @@ typedef enum {
     BTN_K1_PRESS,        // K1 短按（松开触发）
     BTN_K2_PRESS,        // K2 短按（松开触发）
     BTN_K3_PRESS,        // K3 短按（松开触发）
-    BTN_K1_LONG_PRESS,   // K1 长按 >= 600ms
-    BTN_K2_LONG_PRESS,   // K2 长按 >= 600ms
-    BTN_K3_LONG_PRESS    // K3 长按 >= 600ms
+    BTN_K1_LONG_PRESS,   // K1 长按（松开时按住 >= 600ms）
+    BTN_K2_LONG_PRESS,   // K2 长按（松开时按住 >= 600ms）
+    BTN_K3_LONG_PRESS    // K3 长按（松开时按住 >= 600ms）
 } button_event_t;
 ```
 

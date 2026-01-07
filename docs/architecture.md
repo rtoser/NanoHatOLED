@@ -94,7 +94,7 @@ while (running) {
 - 使用 Linux GPIO sysfs 接口
 - 双边沿触发（press/release）
 - poll() 阻塞等待，CPU 占用极低
-- 长按阈值 600ms（短按在松开时上报）
+- 短/长按均在松开时判定（长按阈值 600ms）
 
 **按键映射**：
 | 按键 | GPIO | 功能 |
