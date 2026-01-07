@@ -8,12 +8,16 @@ GPIO_TEST_SRCS := test_gpio_button.c mocks/time_mock.c
 EVENT_TEST_SRCS := test_event_queue.c
 FLOW_TEST_SRCS := test_event_flow.c mocks/time_mock.c
 THREAD_TEST_SRCS := test_thread_safety.c
+UI_TEST_SRCS := test_ui_controller.c
+UI_THREAD_TEST_SRCS := test_ui_thread_default.c
 
 RING_TEST_OBJS := $(RING_TEST_SRCS:.c=.o) ../src/ring_queue.o
 GPIO_TEST_OBJS := $(GPIO_TEST_SRCS:.c=.o) ../src/hal/gpio_hal_mock.o
 EVENT_TEST_OBJS := $(EVENT_TEST_SRCS:.c=.o) ../src/event_queue.o ../src/ring_queue.o
-FLOW_TEST_OBJS := $(FLOW_TEST_SRCS:.c=.o) ../src/event_loop.o ../src/event_queue.o ../src/ui_thread.o ../src/ring_queue.o
+FLOW_TEST_OBJS := $(FLOW_TEST_SRCS:.c=.o) mocks/display_mock.o ../src/ui_controller.o ../src/event_loop.o ../src/event_queue.o ../src/ui_thread.o ../src/ring_queue.o
 THREAD_TEST_OBJS := $(THREAD_TEST_SRCS:.c=.o) ../src/event_queue.o ../src/ring_queue.o
+UI_TEST_OBJS := $(UI_TEST_SRCS:.c=.o) mocks/display_mock.o ../src/ui_controller.o ../src/event_queue.o ../src/ring_queue.o
+UI_THREAD_TEST_OBJS := $(UI_THREAD_TEST_SRCS:.c=.o) mocks/display_mock.o ../src/ui_thread.o ../src/ui_controller.o ../src/event_loop.o ../src/event_queue.o ../src/ring_queue.o
 
 DOCKER_IMAGE ?= openwrt-sdk:sunxi-cortexa53-24.10.5
 TARGET ?= 192.168.33.254
@@ -21,12 +25,14 @@ TARGET_USER ?= root
 GPIOCHIP_PATH ?= /dev/gpiochip1
 BTN_OFFSETS ?= 0,2,3
 
-test-host: test_ring_queue test_gpio_button test_event_queue test_event_flow test_thread_safety
+test-host: test_ring_queue test_gpio_button test_event_queue test_event_flow test_thread_safety test_ui_controller test_ui_thread_default
 	./test_ring_queue
 	./test_gpio_button
 	./test_event_queue
 	./test_event_flow
 	./test_thread_safety
+	./test_ui_controller
+	./test_ui_thread_default
 
 test_ring_queue: $(RING_TEST_OBJS)
 	$(CC) $(CFLAGS) $(RING_TEST_OBJS) -lpthread -o $@
@@ -42,6 +48,12 @@ test_event_flow: $(FLOW_TEST_OBJS)
 
 test_thread_safety: $(THREAD_TEST_OBJS)
 	$(CC) $(CFLAGS) $(THREAD_TEST_OBJS) -lpthread -o $@
+
+test_ui_controller: $(UI_TEST_OBJS)
+	$(CC) $(CFLAGS) $(UI_TEST_OBJS) -lpthread -o $@
+
+test_ui_thread_default: $(UI_THREAD_TEST_OBJS)
+	$(CC) $(CFLAGS) $(UI_THREAD_TEST_OBJS) -lpthread -o $@
 
 test-target:
 	docker run --rm --platform linux/amd64 -v "$(PWD)/..:/work" -w /work $(DOCKER_IMAGE) sh -c '\
@@ -76,4 +88,5 @@ test-target:
 clean:
 	rm -f $(RING_TEST_SRCS:.c=.o) $(GPIO_TEST_SRCS:.c=.o) $(EVENT_TEST_SRCS:.c=.o) \
 		$(FLOW_TEST_SRCS:.c=.o) $(THREAD_TEST_SRCS:.c=.o) \
-		../src/*.o ../src/hal/*.o test_ring_queue test_gpio_button test_event_queue test_event_flow test_thread_safety
+		$(UI_TEST_SRCS:.c=.o) $(UI_THREAD_TEST_SRCS:.c=.o) mocks/display_mock.o ../src/*.o ../src/hal/*.o \
+		test_ring_queue test_gpio_button test_event_queue test_event_flow test_thread_safety test_ui_controller test_ui_thread_default

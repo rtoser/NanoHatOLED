@@ -46,6 +46,12 @@ make test-target TARGET=192.168.33.254 GPIOCHIP_PATH=/dev/gpiochip1 BTN_OFFSETS=
 - `test_thread_safety`
   - event_queue 并发 push/pop 压测
 
+- `test_ui_controller`
+  - UI 事件处理与显示渲染基本行为（基于 display_mock）
+
+- `test_ui_thread_default`
+  - ui_thread 默认 handler 使用 ui_controller 的集成路径
+
 - `test_event_flow`（仅 Linux）
   - event_loop + ui_thread 基础链路
   - tick 启用与 shutdown 投递

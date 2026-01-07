@@ -4,8 +4,10 @@
 #include <unistd.h>
 
 #include "event_loop.h"
+#include "ui_controller.h"
 #include "ui_thread.h"
 #include "mocks/time_mock.h"
+#include "mocks/display_mock.h"
 
 #ifdef __linux__
 
@@ -13,9 +15,12 @@
 
 static atomic_int g_tick_count = 0;
 static atomic_int g_shutdown_count = 0;
+static ui_controller_t g_ui;
 
 static void handler(const app_event_t *event, void *user) {
     (void)user;
+    ui_controller_handle_event(&g_ui, event);
+    ui_controller_render(&g_ui);
     if (event->type == EVT_TICK) {
         atomic_fetch_add(&g_tick_count, 1);
     } else if (event->type == EVT_SHUTDOWN) {
@@ -80,6 +85,9 @@ int main(void) {
         return 1;
     }
 
+    display_mock_reset();
+    ui_controller_init(&g_ui);
+
     pthread_t th;
     pthread_create(&th, NULL, event_loop_thread, &loop);
 
@@ -91,7 +99,7 @@ int main(void) {
         waited++;
     }
 
-    if (atomic_load(&g_tick_count) == 0) {
+    if (atomic_load(&g_tick_count) == 0 || display_mock_begin_count() == 0) {
         fprintf(stderr, "tick not received\n");
         event_loop_request_shutdown(&loop);
         pthread_join(th, NULL);
