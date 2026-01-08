@@ -31,6 +31,8 @@
 #define LOOP_LOG_VERBOSE(...) do {} while (0)
 #endif
 
+#define MAX_GPIO_EVENTS_PER_POLL 16
+
 static app_event_type_t to_app_event_type(gpio_event_type_t type) {
     switch (type) {
         case GPIO_EVT_BTN_K1_SHORT: return EVT_BTN_K1_SHORT;
@@ -107,7 +109,9 @@ static void event_loop_handle_gpio(event_loop_t *loop) {
     LOOP_LOG_VERBOSE("[loop] handle_gpio\n");
     gpio_event_t gpio_evt;
     int ret = 0;
-    while ((ret = gpio_hal->wait_event(0, &gpio_evt)) > 0) {
+    int handled = 0;
+    while (handled < MAX_GPIO_EVENTS_PER_POLL &&
+           (ret = gpio_hal->wait_event(0, &gpio_evt)) > 0) {
         LOOP_LOG("[loop] wait_event ret=%d type=%d line=%u\n",
                  ret, gpio_evt.type, (unsigned int)gpio_evt.line);
         app_event_t evt = {
@@ -119,6 +123,7 @@ static void event_loop_handle_gpio(event_loop_t *loop) {
         if (evt.type != EVT_NONE) {
             event_queue_push(loop->queue, &evt);
         }
+        handled++;
     }
     LOOP_LOG_VERBOSE("[loop] handle_gpio done ret=%d\n", ret);
 }

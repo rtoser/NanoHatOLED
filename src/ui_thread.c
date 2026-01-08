@@ -32,7 +32,7 @@ static void ui_thread_stop_tick(ui_thread_t *ui) {
 }
 
 static void ui_thread_start_tick(ui_thread_t *ui) {
-    if (!ui || !ui->loop || ui->tick_active) {
+    if (!ui || !ui->loop) {
         return;
     }
     ui->tick_active = true;
@@ -55,7 +55,6 @@ static void ui_thread_default_handle(const app_event_t *event, void *user) {
         return;
     }
 
-    uint64_t prev_last_input = ui->controller.last_input_ns;
     ui_controller_handle_event(&ui->controller, event);
     ui_controller_render(&ui->controller);
 
@@ -88,9 +87,6 @@ static void ui_thread_default_handle(const app_event_t *event, void *user) {
 
     if (ui_thread_is_button_event(event->type)) {
         ui_thread_start_tick(ui);
-        if (ui->controller.last_input_ns == prev_last_input && event->timestamp_ns != 0) {
-            ui->controller.last_input_ns = event->timestamp_ns;
-        }
     }
 }
 

@@ -40,6 +40,7 @@ typedef struct {
     uint64_t dropped_critical;
     pthread_mutex_t wait_lock;
     pthread_cond_t wait_cond;
+    bool wait_clock_monotonic;
     _Atomic uint64_t seq;
     _Atomic bool closed;
 } event_queue_t;

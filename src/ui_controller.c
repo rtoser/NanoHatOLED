@@ -48,9 +48,13 @@ void ui_controller_handle_event(ui_controller_t *ui, const app_event_t *event) {
             ui->last_input_ns = event->timestamp_ns;
         }
         if (ui->power_on && ui->idle_timeout_ms > 0) {
-            uint64_t idle_ns = event->timestamp_ns - ui->last_input_ns;
-            if (idle_ns >= (uint64_t)ui->idle_timeout_ms * 1000000ULL) {
-                ui->power_on = false;
+            if (event->timestamp_ns >= ui->last_input_ns) {
+                uint64_t idle_ns = event->timestamp_ns - ui->last_input_ns;
+                if (idle_ns >= (uint64_t)ui->idle_timeout_ms * 1000000ULL) {
+                    ui->power_on = false;
+                }
+            } else {
+                ui->last_input_ns = event->timestamp_ns;
             }
         }
     } else if (event->type == EVT_BTN_K2_SHORT) {

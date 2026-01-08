@@ -49,7 +49,23 @@ int event_queue_init(event_queue_t *q, size_t capacity) {
     ring_queue_set_merge_fn(&q->ring, event_queue_merge_tick, NULL);
 
     pthread_mutex_init(&q->wait_lock, NULL);
+    q->wait_clock_monotonic = false;
+#ifdef __linux__
+    pthread_condattr_t attr;
+    if (pthread_condattr_init(&attr) == 0) {
+        if (pthread_condattr_setclock(&attr, CLOCK_MONOTONIC) == 0) {
+            pthread_cond_init(&q->wait_cond, &attr);
+            q->wait_clock_monotonic = true;
+        } else {
+            pthread_cond_init(&q->wait_cond, NULL);
+        }
+        pthread_condattr_destroy(&attr);
+    } else {
+        pthread_cond_init(&q->wait_cond, NULL);
+    }
+#else
     pthread_cond_init(&q->wait_cond, NULL);
+#endif
     atomic_store(&q->seq, 0);
     atomic_store(&q->closed, false);
     return 0;
@@ -118,7 +134,13 @@ static int event_queue_timed_wait(event_queue_t *q, uint64_t seq, int timeout_ms
     }
 
     struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
+    clockid_t clock_id = CLOCK_REALTIME;
+#ifdef __linux__
+    if (q->wait_clock_monotonic) {
+        clock_id = CLOCK_MONOTONIC;
+    }
+#endif
+    clock_gettime(clock_id, &ts);
     uint64_t nsec = (uint64_t)ts.tv_nsec + (uint64_t)timeout_ms * 1000000ULL;
     ts.tv_sec += (time_t)(nsec / 1000000000ULL);
     ts.tv_nsec = (long)(nsec % 1000000000ULL);
