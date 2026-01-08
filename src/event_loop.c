@@ -11,6 +11,7 @@
 
 #include <errno.h>
 #include <poll.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/eventfd.h>
 #include <sys/timerfd.h>
@@ -18,6 +19,17 @@
 
 #include "hal/gpio_hal.h"
 #include "hal/time_hal.h"
+
+#ifdef LOOP_DEBUG
+#define LOOP_LOG(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define LOOP_LOG(...) do {} while (0)
+#endif
+#ifdef LOOP_DEBUG_VERBOSE
+#define LOOP_LOG_VERBOSE(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define LOOP_LOG_VERBOSE(...) do {} while (0)
+#endif
 
 static app_event_type_t to_app_event_type(gpio_event_type_t type) {
     switch (type) {
@@ -63,6 +75,8 @@ int event_loop_init(event_loop_t *loop, event_queue_t *queue) {
         event_loop_cleanup(loop);
         return -1;
     }
+    LOOP_LOG("[loop] init gpio_fd=%d event_fd=%d timer_fd=%d\n",
+             loop->gpio_fd, loop->event_fd, loop->timer_fd);
 
     return 0;
 }
@@ -90,9 +104,12 @@ void event_loop_request_shutdown(event_loop_t *loop) {
 }
 
 static void event_loop_handle_gpio(event_loop_t *loop) {
+    LOOP_LOG_VERBOSE("[loop] handle_gpio\n");
     gpio_event_t gpio_evt;
     int ret = 0;
     while ((ret = gpio_hal->wait_event(0, &gpio_evt)) > 0) {
+        LOOP_LOG("[loop] wait_event ret=%d type=%d line=%u\n",
+                 ret, gpio_evt.type, (unsigned int)gpio_evt.line);
         app_event_t evt = {
             .type = to_app_event_type(gpio_evt.type),
             .line = gpio_evt.line,
@@ -103,6 +120,7 @@ static void event_loop_handle_gpio(event_loop_t *loop) {
             event_queue_push(loop->queue, &evt);
         }
     }
+    LOOP_LOG_VERBOSE("[loop] handle_gpio done ret=%d\n", ret);
 }
 
 static void event_loop_handle_timer(event_loop_t *loop) {
@@ -176,20 +194,24 @@ int event_loop_run(event_loop_t *loop) {
             }
             return -1;
         }
+        LOOP_LOG_VERBOSE("[loop] poll ret=%d\n", ret);
 
         nfds_t idx = 0;
         if (loop->gpio_fd >= 0) {
+            LOOP_LOG_VERBOSE("[loop] gpio revents=0x%x\n", fds[idx].revents);
             if (fds[idx].revents & POLLIN) {
                 event_loop_handle_gpio(loop);
             }
             idx++;
         }
 
+        LOOP_LOG_VERBOSE("[loop] timer revents=0x%x\n", fds[idx].revents);
         if (fds[idx].revents & POLLIN) {
             event_loop_handle_timer(loop);
         }
         idx++;
 
+        LOOP_LOG_VERBOSE("[loop] event revents=0x%x\n", fds[idx].revents);
         if (fds[idx].revents & POLLIN) {
             event_loop_handle_control(loop);
         }

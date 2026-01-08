@@ -25,6 +25,16 @@ TARGET_USER ?= root
 GPIOCHIP_PATH ?= /dev/gpiochip1
 BTN_OFFSETS ?= 0,2,3
 TEST_IDLE_TIMEOUT_MS ?= 5000
+DEBUG ?= 0
+VERBOSE ?= 0
+
+DEBUG_CFLAGS :=
+ifeq ($(DEBUG),1)
+DEBUG_CFLAGS += -DGPIO_DEBUG -DLOOP_DEBUG
+endif
+ifeq ($(VERBOSE),1)
+DEBUG_CFLAGS += -DGPIO_DEBUG_VERBOSE -DLOOP_DEBUG_VERBOSE
+endif
 
 test-host: test_ring_queue test_gpio_button test_event_queue test_event_flow test_thread_safety test_ui_controller test_ui_thread_default
 	./test_ring_queue
@@ -79,6 +89,7 @@ test-target-gpio:
 			$$CC -I./src -I$$TARGET_DIR/usr/include -O2 -Wall \
 				-DGPIOCHIP_PATH=\"$(GPIOCHIP_PATH)\" -DBTN_OFFSETS=$(BTN_OFFSETS) \
 				-D_POSIX_C_SOURCE=200809L -D_GNU_SOURCE \
+				$(DEBUG_CFLAGS) \
 			tests/target/test_gpio_hw.c src/hal/gpio_hal_libgpiod.c src/hal/time_hal_real.c \
 			-L$$TARGET_DIR/usr/lib -lgpiod -lpthread -o tests/target/test_gpio_hw; \
 	'
@@ -105,6 +116,7 @@ test-target-dual:
 				-DGPIOCHIP_PATH=\"$(GPIOCHIP_PATH)\" -DBTN_OFFSETS=$(BTN_OFFSETS) \
 				-DTEST_IDLE_TIMEOUT_MS=$(TEST_IDLE_TIMEOUT_MS) \
 				-D_POSIX_C_SOURCE=200809L -D_GNU_SOURCE \
+				$(DEBUG_CFLAGS) \
 				tests/target/test_dual_thread.c \
 			src/event_queue.c src/ring_queue.c src/event_loop.c src/ui_thread.c src/ui_controller.c \
 			src/hal/gpio_hal_libgpiod.c src/hal/time_hal_real.c \

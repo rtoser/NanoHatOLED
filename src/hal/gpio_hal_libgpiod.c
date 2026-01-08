@@ -11,6 +11,17 @@
 
 #include "hal/time_hal.h"
 
+#ifdef GPIO_DEBUG
+#define GPIO_LOG(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define GPIO_LOG(...) do {} while (0)
+#endif
+#ifdef GPIO_DEBUG_VERBOSE
+#define GPIO_LOG_VERBOSE(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define GPIO_LOG_VERBOSE(...) do {} while (0)
+#endif
+
 #ifndef GPIOCHIP_PATH
 #define GPIOCHIP_PATH "/dev/gpiochip1"
 #endif
@@ -91,8 +102,8 @@ static int detect_pressed_level(void) {
     }
     int idle_level = (zeros >= ones) ? 0 : 1;
     int level = 1 - idle_level;
-    fprintf(stderr, "[gpio] detect pressed level: zeros=%d ones=%d -> pressed=%d idle=%d\n",
-            zeros, ones, level, idle_level);
+    GPIO_LOG("[gpio] detect pressed level: zeros=%d ones=%d -> pressed=%d idle=%d\n",
+             zeros, ones, level, idle_level);
     return level;
 }
 
@@ -128,8 +139,8 @@ static void process_edge_event(struct gpiod_edge_event *event) {
 
     int new_value = (type == GPIOD_EDGE_EVENT_FALLING_EDGE) ? 0 : 1;
     bool is_pressed = (new_value == g_pressed_level);
-    fprintf(stderr, "[gpio] edge offset=%u line=%d new=%d pressed_level=%d is_pressed=%d\n",
-            offset, line, new_value, g_pressed_level, (int)is_pressed);
+    GPIO_LOG("[gpio] edge offset=%u line=%d new=%d pressed_level=%d is_pressed=%d\n",
+             offset, line, new_value, g_pressed_level, (int)is_pressed);
 
     if (is_pressed) {
         g_pressed[line] = true;
@@ -146,17 +157,17 @@ static void process_edge_event(struct gpiod_edge_event *event) {
             .timestamp_ns = timestamp_ns
         };
         pending_push(&evt);
-        fprintf(stderr, "[gpio] event pushed line=%d type=%d elapsed=%llu\n",
-                line, evt.type, (unsigned long long)elapsed);
+        GPIO_LOG("[gpio] event pushed line=%d type=%d elapsed=%llu\n",
+                 line, evt.type, (unsigned long long)elapsed);
     }
 }
 
 static int wait_for_edge_event(int fd, int timeout_ms) {
     if (fd >= 0) {
         struct pollfd pfd = {.fd = fd, .events = POLLIN};
-        fprintf(stderr, "[gpio] wait_for_edge_event poll fd=%d timeout=%d\n", fd, timeout_ms);
-        int pret = poll(&pfd, 1, timeout_ms);
-        fprintf(stderr, "[gpio] poll ret=%d revents=0x%x errno=%d\n", pret, pfd.revents, errno);
+    GPIO_LOG_VERBOSE("[gpio] wait_for_edge_event poll fd=%d timeout=%d\n", fd, timeout_ms);
+    int pret = poll(&pfd, 1, timeout_ms);
+    GPIO_LOG_VERBOSE("[gpio] poll ret=%d revents=0x%x errno=%d\n", pret, pfd.revents, errno);
         if (pret <= 0) {
             return pret;
         }
@@ -173,7 +184,7 @@ static int read_and_process_edges(gpio_event_t *event) {
         return -1;
     }
 
-    fprintf(stderr, "[gpio] read_and_process_edges num=%d\n", num);
+    GPIO_LOG("[gpio] read_and_process_edges num=%d\n", num);
 
     pthread_mutex_lock(&g_lock);
     for (int i = 0; i < num; i++) {
@@ -228,6 +239,7 @@ int gpio_hal_libgpiod_init(void) {
     reset_state();
     g_chip = gpiod_chip_open(GPIOCHIP_PATH);
     if (!g_chip) {
+    GPIO_LOG("[gpio] gpiod_chip_open(\"%s\") failed: %s\n", GPIOCHIP_PATH, strerror(errno));
         pthread_mutex_unlock(&g_lock);
         return -1;
     }
@@ -247,6 +259,7 @@ int gpio_hal_libgpiod_init(void) {
         pthread_mutex_unlock(&g_lock);
         return -1;
     }
+    GPIO_LOG("[gpio] request ok fd=%d\n", gpiod_line_request_get_fd(g_request));
 
     g_event_buf = gpiod_edge_event_buffer_new(16);
     if (!g_event_buf) {
@@ -296,6 +309,9 @@ int gpio_hal_libgpiod_wait_event(int timeout_ms, gpio_event_t *event) {
         return -1;
     }
 
+    GPIO_LOG_VERBOSE("[gpio] wait_event loop start fd=%d timeout=%d\n",
+                     gpiod_line_request_get_fd(g_request), timeout_ms);
+
     int fd = gpiod_line_request_get_fd(g_request);
     uint64_t start_ms = time_hal_now_ms();
 
@@ -306,6 +322,14 @@ int gpio_hal_libgpiod_wait_event(int timeout_ms, gpio_event_t *event) {
             return 1;
         }
         pthread_mutex_unlock(&g_lock);
+
+        if (timeout_ms == 0) {
+            int processed = read_and_process_edges(event);
+            if (processed != 0) {
+                return processed > 0 ? 1 : -1;
+            }
+            return 0;
+        }
 
         uint64_t now_ms = time_hal_now_ms();
         int effective_timeout = timeout_ms;
@@ -332,6 +356,7 @@ int gpio_hal_libgpiod_wait_event(int timeout_ms, gpio_event_t *event) {
             return -1;
         }
         if (processed > 0) {
+            GPIO_LOG("[gpio] pending event delivered count=%zu\n", g_pending.count);
             return 1;
         }
     }
@@ -339,10 +364,13 @@ int gpio_hal_libgpiod_wait_event(int timeout_ms, gpio_event_t *event) {
 
 int gpio_hal_libgpiod_get_fd(void) {
     if (!g_request) {
+        GPIO_LOG("[gpio] get_fd: request not initialized\n");
         return -1;
     }
     // 返回可被 poll 监听的 fd，用于主线程统一事件循环。
-    return gpiod_line_request_get_fd(g_request);
+    int fd = gpiod_line_request_get_fd(g_request);
+    GPIO_LOG("[gpio] get_fd: %d\n", fd);
+    return fd;
 }
 
 static const gpio_hal_ops_t g_gpio_hal_ops = {

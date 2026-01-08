@@ -31,6 +31,16 @@ make test-target GPIOCHIP_PATH=/dev/gpiochip0 BTN_OFFSETS=0,2,3
 ```
 make test-target TARGET=192.168.33.254 GPIOCHIP_PATH=/dev/gpiochip1 BTN_OFFSETS=0,2,3
 ```
+
+开启调试日志（默认关闭）：
+```
+make test-target-dual DEBUG=1
+```
+
+需要更详细日志时：
+```
+make test-target-dual DEBUG=1 VERBOSE=1
+```
 ## 用例清单与保障范围
 
 - `test_ring_queue`
