@@ -60,6 +60,7 @@
 **构建说明**
 - `gpio_hal_libgpiod.c` 与 `gpio_hal_mock.c` 只能二选一链接
 - Host 测试默认使用 Mock；Target/实际运行需链接 libgpiod 实现
+- 构建模式：`BUILD=default`（`-O2`）、`BUILD=debug`（`-O0 -g -DDEBUG`）、`BUILD=release`（`-O2 -DNDEBUG`）
 
 **预计改动文件（核心）**
 - `src/hal/gpio_hal_libgpiod.c`

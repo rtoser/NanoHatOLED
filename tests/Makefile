@@ -1,5 +1,15 @@
 CC ?= gcc
-CFLAGS ?= -O2 -Wall -Wextra -std=c11 -D_POSIX_C_SOURCE=200809L -D_GNU_SOURCE
+BUILD ?= default
+BASE_CFLAGS ?= -Wall -Wextra -std=c11 -D_POSIX_C_SOURCE=200809L -D_GNU_SOURCE
+MODE_CFLAGS :=
+ifeq ($(BUILD),debug)
+MODE_CFLAGS := -O0 -g -DDEBUG
+else ifeq ($(BUILD),release)
+MODE_CFLAGS := -O2 -DNDEBUG
+else
+MODE_CFLAGS := -O2
+endif
+CFLAGS ?= $(BASE_CFLAGS) $(MODE_CFLAGS)
 
 INCLUDES := -I../src -I./mocks
 

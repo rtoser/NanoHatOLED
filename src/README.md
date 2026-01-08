@@ -56,6 +56,17 @@ BUILD_DIR=build/host make
 
 当前已提供 `Makefile`，默认链接 `display_hal_null.c`（无显示输出），后续接入真实显示 HAL 时可替换链接文件。
 
+可选构建模式（默认 `BUILD=default`，即 `-O2`，不包含 `-g/-DNDEBUG`）：
+
+- `BUILD=debug`：`-O0 -g -DDEBUG`
+- `BUILD=release`：`-O2 -DNDEBUG`
+
+示例：
+```bash
+cd src
+BUILD=release BUILD_DIR=build/target make
+```
+
 ## 部署（示例）
 
 ```bash

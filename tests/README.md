@@ -41,6 +41,12 @@ make test-target-dual DEBUG=1
 ```
 make test-target-dual DEBUG=1 VERBOSE=1
 ```
+
+测试构建模式（默认 `BUILD=default`，即 `-O2`，不包含 `-g/-DNDEBUG`）：
+```
+make test-host BUILD=debug
+make test-host BUILD=release
+```
 ## 用例清单与保障范围
 
 - `test_ring_queue`
