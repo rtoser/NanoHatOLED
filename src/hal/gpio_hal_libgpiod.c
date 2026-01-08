@@ -89,9 +89,11 @@ static int detect_pressed_level(void) {
             ones++;
         }
     }
-    int level = (zeros >= ones) ? 1 : 0;
-    fprintf(stderr, "[gpio] detect pressed level: zeros=%d ones=%d -> %d\n", zeros, ones, level);
-    return (zeros >= ones) ? 1 : 0;
+    int idle_level = (zeros >= ones) ? 0 : 1;
+    int level = 1 - idle_level;
+    fprintf(stderr, "[gpio] detect pressed level: zeros=%d ones=%d -> pressed=%d idle=%d\n",
+            zeros, ones, level, idle_level);
+    return level;
 }
 
 static void reset_state(void) {
@@ -152,7 +154,9 @@ static void process_edge_event(struct gpiod_edge_event *event) {
 static int wait_for_edge_event(int fd, int timeout_ms) {
     if (fd >= 0) {
         struct pollfd pfd = {.fd = fd, .events = POLLIN};
+        fprintf(stderr, "[gpio] wait_for_edge_event poll fd=%d timeout=%d\n", fd, timeout_ms);
         int pret = poll(&pfd, 1, timeout_ms);
+        fprintf(stderr, "[gpio] poll ret=%d revents=0x%x errno=%d\n", pret, pfd.revents, errno);
         if (pret <= 0) {
             return pret;
         }
@@ -168,6 +172,8 @@ static int read_and_process_edges(gpio_event_t *event) {
     if (num < 0) {
         return -1;
     }
+
+    fprintf(stderr, "[gpio] read_and_process_edges num=%d\n", num);
 
     pthread_mutex_lock(&g_lock);
     for (int i = 0; i < num; i++) {
