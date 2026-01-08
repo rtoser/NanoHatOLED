@@ -88,6 +88,8 @@ static int detect_pressed_level(void) {
             ones++;
         }
     }
+    int level = (zeros >= ones) ? 1 : 0;
+    fprintf(stderr, "[gpio] detect pressed level: zeros=%d ones=%d -> %d\n", zeros, ones, level);
     return (zeros >= ones) ? 1 : 0;
 }
 
@@ -123,6 +125,8 @@ static void process_edge_event(struct gpiod_edge_event *event) {
 
     int new_value = (type == GPIOD_EDGE_EVENT_FALLING_EDGE) ? 0 : 1;
     bool is_pressed = (new_value == g_pressed_level);
+    fprintf(stderr, "[gpio] edge offset=%u line=%d new=%d pressed_level=%d is_pressed=%d\n",
+            offset, line, new_value, g_pressed_level, (int)is_pressed);
 
     if (is_pressed) {
         g_pressed[line] = true;
@@ -139,6 +143,8 @@ static void process_edge_event(struct gpiod_edge_event *event) {
             .timestamp_ns = timestamp_ns
         };
         pending_push(&evt);
+        fprintf(stderr, "[gpio] event pushed line=%d type=%d elapsed=%llu\n",
+                line, evt.type, (unsigned long long)elapsed);
     }
 }
 

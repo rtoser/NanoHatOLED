@@ -370,6 +370,7 @@ display_mock_state_t *display_mock_get_state(void);
 | `test_button_during_animation` | 动画中按键 | 按键不丢失 |
 | `test_shutdown` | 发送 SIGTERM | 优雅退出，无残留线程 |
 | `test_shutdown_during_wait` | GPIO 阻塞时退出 | 仍可及时退出 |
+| `test_dual_thread` | event_loop + UI 线程 | 验证按键、tick、自动息屏与唤醒流程 |
 
 **验收标准**:
 - [ ] 所有 Host 单元测试通过
@@ -566,6 +567,7 @@ make test-target TARGET=192.168.33.254 TARGET_USER=root \
 - 建议先停止服务：`ssh root@<ip> "service nanohat-oled stop; sleep 1"`
 - `test-target` 依次运行 `test_gpio_hw` 与 `test_dual_thread`，默认覆盖 GPIO 和自动息屏链路
 - 若只想执行双线程交互，可以单独调用 `make test-target-dual ...`
+- 若目标使用其他 gpiochip，可用 `GPIOCHIP_PATH=/dev/gpiochip0` 覆盖；建议先用 `gpiomon -c <chip> 0 2 3` 确认按键所在的 chip。
 - `test-target-dual` 为交互式双线程验证，需按提示完成按键/息屏/唤醒流程
 
 ### 4.3 Mock 时间控制

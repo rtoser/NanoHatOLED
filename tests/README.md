@@ -72,6 +72,7 @@ make test-target TARGET=192.168.33.254 GPIOCHIP_PATH=/dev/gpiochip1 BTN_OFFSETS=
   - 双线程事件循环联调（event_loop + ui_thread + gpio_hal）
   - 按键输入、自动息屏、唤醒流程验证
   - 事件循环退出与资源清理
+  - 通过测试事件队列（tick/主线程）与 UI 线程默认 handler 的协作，确认 `event_loop_request_tick`、自动息屏状态和 `ui_controller` 渲染一致
 
 ## 注意事项
 
