@@ -20,10 +20,11 @@
 ## 快速开始
 
 ```bash
-cd src_adr0005
-
 # 构建（默认 RelWithDebInfo）
-docker run --rm --platform linux/amd64 -v "$(pwd):/src" -w /src openwrt-sdk:sunxi-cortexa53-24.10.5 sh build_in_docker.sh
+docker run --rm --platform linux/amd64 \
+  -v "$(pwd)/src_adr0005:/src" -w /src \
+  openwrt-sdk:sunxi-cortexa53-24.10.5 \
+  sh build_in_docker.sh
 ```
 
 输出文件：`build/target/nanohat-oled`（约 95KB）
@@ -130,7 +131,10 @@ OpenWrt SDK 镜像为 `linux/amd64`，在 Apple Silicon Mac 上需要显式指�
 
 ```bash
 # 必须添加 --platform linux/amd64 参数
-docker run --rm --platform linux/amd64 -v "$(pwd):/src" -w /src openwrt-sdk:sunxi-cortexa53-24.10.5 sh build_in_docker.sh
+docker run --rm --platform linux/amd64 \
+  -v "$(pwd)/src_adr0005:/src" -w /src \
+  openwrt-sdk:sunxi-cortexa53-24.10.5 \
+  sh build_in_docker.sh
 ```
 
 性能影响：编译速度约为原生的 30-50%（通过 Rosetta 2 模拟）。
