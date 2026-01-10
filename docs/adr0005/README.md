@@ -2,6 +2,8 @@
 
 本目录集中存放 ADR0005 相关的新文档，避免与旧设计文档混淆。
 
+> 说明：ADR0005 已归档，代码与测试已移动到 `src_adr0005/`。新的重构主线请参考 `docs/adr0006/` 与 `src/`。
+
 ## 核心设计
 
 - [ADR 0005：终极三线程架构](../adr/0005-ultimate-threaded-architecture.md)

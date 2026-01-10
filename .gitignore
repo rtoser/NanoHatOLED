@@ -8,7 +8,16 @@ NanoHatOLED
 src_old/nanohat-oled
 src_old/oled_demo
 src/nanohat-oled
+src/build/
 tests/test_runner
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+
+# Backup files
+*.bak
 tests/test_ring_queue
 tests/test_gpio_button
 tests/test_event_queue

@@ -20,6 +20,11 @@ Aim to compatible with Python3.x and standard C. No Python2.x, no C++.
 
 The original implementation was based on Python2.x, thanks to [CuitGGyy](https://github.com/CuitGGyy/NanoHatOLED) for porting it to Python 3.x environment.
 
+## Refactor History
+
+- ADR0005: Multi-threaded reimplementation archived at `src_adr0005/` with tests in `src_adr0005/tests/`.
+- ADR0006: Current refactor baseline. New architecture docs live under `docs/adr0006/` and new code lives under `src/`.
+
 
 ## Installation
 

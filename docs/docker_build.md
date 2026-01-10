@@ -1,303 +1,200 @@
 # Docker 交叉编译指南
 
+> 说明：本文档描述 ADR0005 构建流程，代码已归档至 `src_adr0005/`。ADR0006 将另行维护新的构建说明。
+
 ## 概述
 
-本项目使用 Docker 进行交叉编译，从 macOS（或其他主机系统）编译出适用于 OpenWrt aarch64 目标平台的可执行文件。
+本项目使用 Docker + OpenWrt SDK 进行交叉编译，从 macOS（或其他主机系统）编译出适用于 OpenWrt aarch64 目标平台的可执行文件。
 
 ## 编译环境
 
 | 组件 | 说明 |
 |------|------|
 | 主机系统 | macOS (Apple Silicon / Intel) 或 Linux |
-| Docker 镜像 | `dockcross/linux-arm64-musl` |
+| Docker 镜像 | `openwrt-sdk:sunxi-cortexa53-24.10.5` |
+| 构建系统 | CMake 3.13+ |
 | 目标架构 | aarch64 (ARM64) |
-| C 库 | musl libc（静态链接） |
+| C 库 | musl libc（动态链接） |
 | 目标系统 | OpenWrt 24.10+ |
 
-## 为什么使用 Docker 交叉编译
-
-### 1. 环境一致性
-- 编译环境与开发者主机系统解耦
-- 避免"在我机器上能编译"的问题
-- CI/CD 友好
-
-### 2. 简化工具链管理
-- 无需手动安装交叉编译工具链
-- dockcross 镜像预装完整工具链
-- 一行命令即可编译
-
-### 3. musl libc 优势
-- 静态链接后体积小
-- 与 OpenWrt 原生兼容
-- 无 glibc 版本兼容问题
-
-## 编译步骤
-
-### 快速编译
+## 快速开始
 
 ```bash
-# 在项目根目录执行
-bash run_docker.sh
+cd src_adr0005
+
+# 构建（默认 RelWithDebInfo）
+docker run --rm --platform linux/amd64 -v "$(pwd):/src" -w /src openwrt-sdk:sunxi-cortexa53-24.10.5 sh build_in_docker.sh
 ```
 
-输出文件：`src/nanohat-oled`
+输出文件：`build/target/nanohat-oled`（约 95KB）
 
-### 手动编译
+## 构建模式
 
-```bash
-# 运行 Docker 容器并编译
-docker run --rm --platform linux/amd64 \
-    -v "$(pwd)/src:/work" \
-    -w /work \
-    dockcross/linux-arm64-musl \
-    bash -c "
-        export PATH=/usr/xcc/aarch64-linux-musl-cross/bin:\$PATH
-        make clean
-        make -j\$(nproc)
-    "
-```
+| 模式 | 命令 | 说明 |
+|------|------|------|
+| 默认 | `sh build_in_docker.sh` | `-O2`，保留调试信息 |
+| Release | `BUILD=release sh build_in_docker.sh` | `-O2 -DNDEBUG`，最小体积 |
+| Debug | `BUILD=debug sh build_in_docker.sh` | `-O0 -g -DDEBUG` |
 
-## 编译脚本详解
+## 构建脚本详解
 
-### run_docker.sh
+### build_in_docker.sh
 
 ```bash
-#!/bin/bash
+#!/bin/sh
 set -e
 
-# Cross-compile for aarch64 musl (OpenWrt)
-echo "=== Building nanohat-oled ==="
+# 自动检测 OpenWrt SDK 路径
+TOOLCHAIN_DIR=$(find /builder/staging_dir -maxdepth 1 -type d -name "toolchain-*")
+TARGET_DIR=$(find /builder/staging_dir -maxdepth 1 -type d -name "target-*")
+export PATH="$TOOLCHAIN_DIR/bin:$PATH"
 
-docker run --rm --platform linux/amd64 \
-    -v "$(pwd)/src:/work" \                    # 挂载源码目录
-    -w /work \                                  # 设置工作目录
-    dockcross/linux-arm64-musl \               # 使用 musl 工具链镜像
-    bash -c "
-        export PATH=/usr/xcc/aarch64-linux-musl-cross/bin:\$PATH
-        make clean
-        make -j\$(nproc)                        # 并行编译
-        file nanohat-oled                       # 验证输出文件
-    "
+# 检测编译器
+CC=aarch64-openwrt-linux-musl-gcc
 
-echo "=== Build complete ==="
-ls -lh src/nanohat-oled
+# CMake 构建
+cmake -S . -B "$BUILD_DIR" \
+    -DCMAKE_C_COMPILER="$CC" \
+    -DCMAKE_BUILD_TYPE="$CMAKE_BUILD_TYPE" \
+    -DTARGET_DIR="$TARGET_DIR"
+cmake --build "$BUILD_DIR" --parallel
 ```
 
-**关键参数说明**：
+### CMakeLists.txt 关键配置
 
-| 参数 | 说明 |
-|------|------|
-| `--rm` | 容器退出后自动删除 |
-| `--platform linux/amd64` | 在 Apple Silicon 上使用 x86 模拟（镜像仅支持 amd64） |
-| `-v "$(pwd)/src:/work"` | 将 src 目录挂载到容器的 /work |
-| `-w /work` | 设置容器工作目录 |
+```cmake
+# 只编译需要的 u8g2 文件（19 个，而非全部 129 个）
+set(U8G2_CORE
+    u8g2_buffer.c u8g2_box.c u8g2_cleardisplay.c
+    u8g2_d_memory.c u8g2_d_setup.c u8g2_font.c u8g2_fonts.c
+    u8g2_hvline.c u8g2_intersection.c u8g2_ll_hvline.c u8g2_setup.c
+)
+set(U8X8_CORE
+    u8x8_8x8.c u8x8_byte.c u8x8_cad.c u8x8_display.c
+    u8x8_gpio.c u8x8_setup.c u8x8_string.c
+)
+set(U8X8_DRIVER u8x8_d_ssd1306_128x64_noname.c)
 
-### Makefile
-
-```makefile
-CC = aarch64-linux-musl-gcc        # 交叉编译器
-CFLAGS = -I./u8g2/csrc -I. -O2 -Wall
-LDFLAGS = -static                   # 静态链接
-
-# U8g2 图形库源文件
-U8G2_SRC_DIR = u8g2/csrc
-U8G2_SOURCES = $(wildcard $(U8G2_SRC_DIR)/*.c)
-U8G2_OBJECTS = $(U8G2_SOURCES:.c=.o)
-
-# 应用源文件
-APP_SOURCES = main.c u8g2_port_linux.c gpio_button.c sys_status.c
-APP_OBJECTS = $(APP_SOURCES:.c=.o)
-
-TARGET = nanohat-oled
-
-all: $(TARGET)
-
-$(TARGET): $(APP_OBJECTS) $(U8G2_OBJECTS)
-	$(CC) $(APP_OBJECTS) $(U8G2_OBJECTS) -o $@ $(LDFLAGS)
-
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
-
-clean:
-	rm -f $(APP_OBJECTS) $(U8G2_OBJECTS) $(TARGET)
+# 链接器优化 - 移除未使用代码
+add_compile_options(-ffunction-sections -fdata-sections)
+add_link_options(-Wl,--gc-sections)
 ```
 
-**编译选项说明**：
+## OpenWrt SDK 镜像
 
-| 选项 | 说明 |
-|------|------|
-| `-I./u8g2/csrc` | u8g2 库头文件路径 |
-| `-O2` | 优化级别 2 |
-| `-Wall` | 开启所有警告 |
-| `-static` | 静态链接所有库 |
+### 镜像构建
 
-## dockcross 镜像
+参考 `docker/` 目录下的 Dockerfile 构建 OpenWrt SDK 镜像：
 
-### 什么是 dockcross
-
-[dockcross](https://github.com/dockcross/dockcross) 是一组预构建的 Docker 镜像，包含各种目标平台的交叉编译工具链。
-
-### 可用镜像
-
-| 镜像 | 目标平台 | 用途 |
-|------|---------|------|
-| `linux-arm64-musl` | aarch64 + musl | OpenWrt、Alpine |
-| `linux-arm64` | aarch64 + glibc | Debian/Ubuntu ARM64 |
-| `linux-armv7` | armv7 + glibc | Raspberry Pi 等 |
-| `linux-x64` | x86_64 + glibc | 通用 Linux |
+```bash
+cd docker
+docker build -t openwrt-sdk:sunxi-cortexa53-24.10.5 .
+```
 
 ### 镜像内部结构
 
 ```
-/usr/xcc/aarch64-linux-musl-cross/
-├── bin/
-│   ├── aarch64-linux-musl-gcc
-│   ├── aarch64-linux-musl-g++
-│   ├── aarch64-linux-musl-ar
-│   ├── aarch64-linux-musl-strip
-│   └── ...
-├── lib/
-└── include/
+/builder/
+├── staging_dir/
+│   ├── toolchain-aarch64_cortex-a53_gcc-13.3.0_musl/
+│   │   └── bin/
+│   │       ├── aarch64-openwrt-linux-musl-gcc
+│   │       ├── aarch64-openwrt-linux-musl-g++
+│   │       └── ...
+│   └── target-aarch64_cortex-a53_musl/
+│       ├── usr/include/   # 目标系统头文件
+│       └── usr/lib/       # 目标系统库文件
+```
+
+## CMake 配置选项
+
+| 选项 | 默认值 | 说明 |
+|------|--------|------|
+| `GPIOCHIP_PATH` | `/dev/gpiochip1` | GPIO 芯片设备路径 |
+| `BTN_OFFSETS` | `0,2,3` | 按钮 GPIO 偏移量 |
+| `MONITORED_SERVICES` | `dropbear,xray_core,collectd,uhttpd` | 监控的服务列表 |
+| `TARGET_DIR` | `/opt/target` | 目标 sysroot 路径 |
+
+自定义示例：
+
+```bash
+cmake -S . -B build \
+    -DGPIOCHIP_PATH="/dev/gpiochip0" \
+    -DBTN_OFFSETS="1,2,3" \
+    -DMONITORED_SERVICES="sshd,nginx"
 ```
 
 ## Apple Silicon 注意事项
 
-### 平台模拟
-
-dockcross 镜像仅提供 `linux/amd64` 版本。在 Apple Silicon Mac 上，Docker Desktop 通过 Rosetta 2 模拟 x86_64 环境。
+OpenWrt SDK 镜像为 `linux/amd64`，在 Apple Silicon Mac 上需要显式指定平台：
 
 ```bash
-docker run --platform linux/amd64 ...
+# 必须添加 --platform linux/amd64 参数
+docker run --rm --platform linux/amd64 -v "$(pwd):/src" -w /src openwrt-sdk:sunxi-cortexa53-24.10.5 sh build_in_docker.sh
 ```
 
-### 性能影响
-
-- 编译速度约为原生的 30-50%
-- 首次运行需要下载 ~1GB 镜像
-- 后续编译使用缓存的镜像
-
-### 替代方案
-
-如需更好性能，可以：
-1. 在 Linux x86 机器上编译
-2. 使用 GitHub Actions 进行 CI 编译
-3. 在目标设备上本地编译（如果支持）
+性能影响：编译速度约为原生的 30-50%（通过 Rosetta 2 模拟）。
 
 ## 验证编译结果
 
 ```bash
 # 检查文件类型
-file src/nanohat-oled
-
-# 期望输出：
-# nanohat-oled: ELF 64-bit LSB pie executable, ARM aarch64, version 1 (SYSV),
-# static-pie linked, with debug_info, not stripped
+file build/target/nanohat-oled
+# ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV),
+# dynamically linked, interpreter /lib/ld-musl-aarch64.so.1
 
 # 检查文件大小
-ls -lh src/nanohat-oled
-
-# 优化体积（可选）
-aarch64-linux-musl-strip src/nanohat-oled
+ls -lh build/target/nanohat-oled
+# -rwxr-xr-x  95K  nanohat-oled
 ```
 
 ## 部署到目标设备
 
 ```bash
-# 停止运行中的服务
-ssh root@<device-ip> "killall nanohat-oled 2>/dev/null; rm -f /usr/bin/nanohat-oled"
+# 停止服务
+ssh root@<device-ip> "service nanohat-oled stop; sleep 1"
 
 # 上传新版本
-scp src/nanohat-oled root@<device-ip>:/usr/bin/
+scp build/target/nanohat-oled root@<device-ip>:/usr/bin/
 
 # 启动服务
-ssh root@<device-ip> "/etc/init.d/nanohat-oled start"
+ssh root@<device-ip> "service nanohat-oled start"
 ```
 
 ## 常见问题
 
-### 1. Docker 镜像下载慢
+### 1. CMake 找不到编译器
 
-使用国内镜像加速：
+确保在 Docker 容器内运行，或手动设置 PATH：
 
 ```bash
-# 配置 Docker daemon.json
-{
-  "registry-mirrors": ["https://mirror.ccs.tencentyun.com"]
-}
+export PATH=/builder/staging_dir/toolchain-aarch64_cortex-a53_gcc-13.3.0_musl/bin:$PATH
 ```
 
-### 2. 编译报错：找不到头文件
+### 2. 链接错误：找不到 libgpiod/libubus
 
-确保 u8g2 子模块已初始化：
+确保 `TARGET_DIR` 指向正确的 sysroot：
+
+```bash
+cmake -DTARGET_DIR=/builder/staging_dir/target-aarch64_cortex-a53_musl ...
+```
+
+### 3. u8g2 子模块未初始化
 
 ```bash
 git submodule update --init --recursive
 ```
 
-### 3. 目标设备报错：Exec format error
+### 4. 二进制文件过大
 
-确认编译的架构与目标设备匹配：
-
-```bash
-# 检查设备架构
-ssh root@<device> "uname -m"
-# 应输出：aarch64
-
-# 检查编译产物
-file src/nanohat-oled
-# 应包含：ARM aarch64
-```
-
-### 4. 静态链接后文件过大
-
-使用 strip 去除调试信息：
+确保使用 Release 模式构建：
 
 ```bash
-docker run --rm --platform linux/amd64 \
-    -v "$(pwd)/src:/work" \
-    -w /work \
-    dockcross/linux-arm64-musl \
-    aarch64-linux-musl-strip nanohat-oled
-```
-
-strip 前后对比：
-- 带调试信息：~15MB
-- strip 后：~300KB
-
-## CI/CD 集成示例
-
-### GitHub Actions
-
-```yaml
-name: Build
-
-on: [push, pull_request]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Build with dockcross
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}/src:/work \
-            -w /work \
-            dockcross/linux-arm64-musl \
-            bash -c "make clean && make -j$(nproc)"
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: nanohat-oled
-          path: src/nanohat-oled
+BUILD=release sh build_in_docker.sh
 ```
 
 ## 参考资料
 
-- [dockcross GitHub](https://github.com/dockcross/dockcross)
-- [musl libc](https://musl.libc.org/)
 - [OpenWrt 开发文档](https://openwrt.org/docs/guide-developer/start)
+- [CMake 文档](https://cmake.org/documentation/)
+- [u8g2 图形库](https://github.com/olikraus/u8g2)

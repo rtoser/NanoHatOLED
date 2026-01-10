@@ -41,7 +41,7 @@ cd docker
 ./build.sh
 
 # 2. 编译项目
-docker run --rm -v "$(pwd)/src:/src" openwrt-sdk-sunxi sh /src/build_in_docker.sh
+docker run --rm -v "$(pwd)/src:/src" openwrt-sdk:sunxi-cortexa53-24.10.5 sh /src/build_in_docker.sh
 ```
 
 输出：`src/nanohat-oled`（静态链接的 aarch64 可执行文件，约 15MB）
