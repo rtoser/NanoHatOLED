@@ -37,8 +37,12 @@ typedef struct {
     /* Animation state */
     anim_state_t anim;
 
+    /* Enter mode tracking */
+    uint64_t enter_mode_start_ms;
+
     /* Configuration */
     uint32_t idle_timeout_ms;
+    uint32_t enter_mode_timeout_ms;
 
     /* Registered pages */
     const page_t **pages;
@@ -93,5 +97,15 @@ bool page_controller_is_animating(const page_controller_t *pc);
  * Set idle timeout for auto screen-off (0 to disable).
  */
 void page_controller_set_idle_timeout(page_controller_t *pc, uint32_t timeout_ms);
+
+/*
+ * Enable/disable auto screen-off feature.
+ */
+void page_controller_set_auto_screen_off(bool enabled);
+
+/*
+ * Check if auto screen-off is enabled.
+ */
+bool page_controller_is_auto_screen_off_enabled(void);
 
 #endif

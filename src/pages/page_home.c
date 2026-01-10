@@ -36,8 +36,8 @@ static void home_render(u8g2_t *u8g2, const sys_status_t *status,
     if (!status) {
         /* Show placeholder when status not available */
         ui_draw_str(u8g2, x, LINE1_Y, "CPU: --    --" "\xb0" "C");
-        ui_draw_str(u8g2, x, LINE2_Y, "MEM: --");
-        ui_draw_str(u8g2, x, LINE3_Y, "RUN: --");
+        ui_draw_str(u8g2, x, LINE2_Y, "MEM:  --");
+        ui_draw_str(u8g2, x, LINE3_Y, "RUN:  --");
         return;
     }
 
@@ -49,14 +49,14 @@ static void home_render(u8g2_t *u8g2, const sys_status_t *status,
     /* Line 2: Memory */
     uint64_t mem_used_mb = (status->mem_total_kb - status->mem_available_kb) / 1024;
     uint64_t mem_total_mb = status->mem_total_kb / 1024;
-    snprintf(buf, sizeof(buf), "MEM:%luM / %luM",
+    snprintf(buf, sizeof(buf), "MEM: %luM / %luM",
              (unsigned long)mem_used_mb, (unsigned long)mem_total_mb);
     ui_draw_str(u8g2, x, LINE2_Y, buf);
 
     /* Line 3: Runtime (uptime) */
     char uptime_str[16];
     sys_status_format_uptime(status->uptime_sec, uptime_str, sizeof(uptime_str));
-    snprintf(buf, sizeof(buf), "RUN:%s", uptime_str);
+    snprintf(buf, sizeof(buf), "RUN: %s", uptime_str);
     ui_draw_str(u8g2, x, LINE3_Y, buf);
 }
 

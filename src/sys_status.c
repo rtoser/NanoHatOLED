@@ -414,7 +414,6 @@ int sys_status_query_services(sys_status_ctx_t *ctx, sys_status_t *status) {
             (now_ms - svc->last_update_ms) < SERVICE_REFRESH_INTERVAL_MS) {
             continue;
         }
-
         /* Allocate callback context */
         query_ctx_t *qctx = malloc(sizeof(query_ctx_t));
         if (!qctx) continue;
@@ -454,4 +453,79 @@ bool sys_status_has_pending_queries(const sys_status_t *status) {
         }
     }
     return false;
+}
+
+/*
+ * Callback context for service control
+ */
+typedef struct {
+    sys_status_t *status;
+    int index;
+    bool start;
+    sys_status_control_cb cb;
+    void *priv;
+} control_ctx_t;
+
+/*
+ * Callback invoked when ubus control completes
+ */
+static void service_control_cb(const char *service, bool success,
+                                int status_code, void *priv) {
+    (void)service;
+    (void)status_code;
+
+    control_ctx_t *cctx = (control_ctx_t *)priv;
+    if (!cctx || !cctx->status) {
+        free(cctx);
+        return;
+    }
+
+    sys_status_t *status = cctx->status;
+    int idx = cctx->index;
+
+    if (idx >= 0 && (size_t)idx < status->service_count) {
+        /* Force a query refresh to get updated status */
+        status->services[idx].last_update_ms = 0;
+
+        /* If successful, optimistically update running state */
+        if (success) {
+            status->services[idx].running = cctx->start;
+        }
+    }
+
+    if (cctx->cb) {
+        cctx->cb(idx, success, status_code, cctx->priv);
+    }
+
+    free(cctx);
+}
+
+int sys_status_control_service(sys_status_ctx_t *ctx, sys_status_t *status,
+                                int index, bool start,
+                                sys_status_control_cb cb, void *priv) {
+    (void)ctx;
+
+    if (!status || !ubus_hal || !ubus_hal->control_service_async) return -1;
+    if (index < 0 || (size_t)index >= status->service_count) return -1;
+
+    service_status_t *svc = &status->services[index];
+
+    /* Allocate callback context */
+    control_ctx_t *cctx = malloc(sizeof(control_ctx_t));
+    if (!cctx) return -1;
+
+    cctx->status = status;
+    cctx->index = index;
+    cctx->start = start;
+    cctx->cb = cb;
+    cctx->priv = priv;
+
+    /* Initiate async control */
+    int ret = ubus_hal->control_service_async(svc->name, start, service_control_cb, cctx);
+    if (ret < 0) {
+        free(cctx);
+        return -1;
+    }
+
+    return 0;
 }

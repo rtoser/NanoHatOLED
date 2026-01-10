@@ -6,8 +6,14 @@
 
 #include "u8g2_api.h"
 #include "fonts.h"
-/* Default idle timeout: 30 seconds */
+/* Default idle timeout: 30 seconds (0 = disabled) */
 #define DEFAULT_IDLE_TIMEOUT_MS 30000
+
+/* Auto screen-off enable flag (can be changed at runtime) */
+static bool g_auto_screen_off_enabled = false;  /* Disabled for testing */
+
+/* Default enter mode timeout: 60 seconds */
+#define DEFAULT_ENTER_MODE_TIMEOUT_MS 60000
 
 /* Font sizes (u8g2 font height references) */
 #define FONT_TITLE_HEIGHT 12
@@ -33,9 +39,10 @@ void page_controller_init(page_controller_t *pc, const page_t **pages, int page_
     pc->pages = pages;
     pc->page_count = page_count;
     pc->screen_state = SCREEN_ON;
-    pc->current_page = 0;  /* Default to Home page */
+    pc->current_page = 1;  /* Default to Gateway page */
     pc->page_mode = PAGE_MODE_VIEW;
     pc->idle_timeout_ms = DEFAULT_IDLE_TIMEOUT_MS;
+    pc->enter_mode_timeout_ms = DEFAULT_ENTER_MODE_TIMEOUT_MS;
     pc->anim.type = ANIM_NONE;
 
     /* Initialize all pages */
@@ -81,16 +88,20 @@ static void switch_page(page_controller_t *pc, int direction, uint64_t now_ms) {
     }
 }
 
+static void exit_enter_mode(page_controller_t *pc, uint64_t now_ms) {
+    pc->page_mode = PAGE_MODE_VIEW;
+    start_animation(pc, ANIM_EXIT_MODE, now_ms);
+
+    const page_t *page = pc->pages[pc->current_page];
+    if (page && page->on_exit) {
+        page->on_exit();
+    }
+}
+
 static bool try_enter_mode(page_controller_t *pc, uint64_t now_ms) {
     if (pc->page_mode == PAGE_MODE_ENTER) {
         /* Already in enter mode - exit */
-        pc->page_mode = PAGE_MODE_VIEW;
-        start_animation(pc, ANIM_EXIT_MODE, now_ms);
-
-        const page_t *page = pc->pages[pc->current_page];
-        if (page && page->on_exit) {
-            page->on_exit();
-        }
+        exit_enter_mode(pc, now_ms);
         return true;
     }
 
@@ -99,6 +110,7 @@ static bool try_enter_mode(page_controller_t *pc, uint64_t now_ms) {
 
     if (page->can_enter) {
         pc->page_mode = PAGE_MODE_ENTER;
+        pc->enter_mode_start_ms = now_ms;
         start_animation(pc, ANIM_ENTER_MODE, now_ms);
         if (page->on_enter) {
             page->on_enter();
@@ -131,13 +143,18 @@ bool page_controller_handle_key(page_controller_t *pc, uint8_t key, bool long_pr
 
     const page_t *page = pc->pages[pc->current_page];
 
-    /* Let page handle key first in enter mode */
-    if (pc->page_mode == PAGE_MODE_ENTER && page && page->on_key) {
+    /* Handle enter mode */
+    if (pc->page_mode == PAGE_MODE_ENTER) {
+        /* Reset enter mode timeout on any activity */
+        pc->enter_mode_start_ms = now_ms;
+
+        /* K2 long press always exits enter mode */
         if (key == KEY_K2 && long_press) {
-            /* K2 long press always exits enter mode */
             return try_enter_mode(pc, now_ms);
         }
-        if (page->on_key(key, long_press, pc->page_mode)) {
+
+        /* Let page handle other keys */
+        if (page && page->on_key && page->on_key(key, long_press, pc->page_mode)) {
             return true;
         }
     }
@@ -189,10 +206,19 @@ bool page_controller_tick(page_controller_t *pc, uint64_t now_ms) {
         pc->last_activity_ms = now_ms;
     }
 
-    /* Check auto screen-off */
-    if (pc->screen_state == SCREEN_ON && pc->idle_timeout_ms > 0) {
+    /* Check auto screen-off (only if enabled) */
+    if (g_auto_screen_off_enabled &&
+        pc->screen_state == SCREEN_ON && pc->idle_timeout_ms > 0) {
         if (now_ms - pc->last_activity_ms >= pc->idle_timeout_ms) {
             pc->screen_state = SCREEN_OFF;
+            needs_render = true;
+        }
+    }
+
+    /* Check enter mode auto-exit timeout */
+    if (pc->page_mode == PAGE_MODE_ENTER && pc->enter_mode_timeout_ms > 0) {
+        if (now_ms - pc->enter_mode_start_ms >= pc->enter_mode_timeout_ms) {
+            exit_enter_mode(pc, now_ms);
             needs_render = true;
         }
     }
@@ -332,4 +358,12 @@ void page_controller_set_idle_timeout(page_controller_t *pc, uint32_t timeout_ms
     if (pc) {
         pc->idle_timeout_ms = timeout_ms;
     }
+}
+
+void page_controller_set_auto_screen_off(bool enabled) {
+    g_auto_screen_off_enabled = enabled;
+}
+
+bool page_controller_is_auto_screen_off_enabled(void) {
+    return g_auto_screen_off_enabled;
 }

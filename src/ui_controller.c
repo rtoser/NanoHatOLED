@@ -7,6 +7,13 @@
 
 #include "hal/display_hal.h"
 #include "pages/pages.h"
+#include "pages/page_services.h"
+
+static void ui_services_control_cb(int index, bool success, int status, void *priv) {
+    (void)status;
+    (void)priv;
+    page_services_notify_control_result(index, success);
+}
 
 void ui_controller_init(ui_controller_t *ui) {
     if (!ui) return;
@@ -42,6 +49,16 @@ bool ui_controller_handle_button(ui_controller_t *ui, uint8_t key, bool long_pre
     bool changed = page_controller_handle_key(&ui->page_ctrl, key, long_press, now_ms);
     ui->power_on = page_controller_is_screen_on(&ui->page_ctrl);
 
+    int control_index = -1;
+    bool control_start = false;
+    if (page_services_take_control_request(&control_index, &control_start, now_ms)) {
+        if (!ui->status_ctx ||
+            sys_status_control_service(ui->status_ctx, &ui->status, control_index,
+                                       control_start, ui_services_control_cb, NULL) < 0) {
+            page_services_notify_control_result(control_index, false);
+        }
+    }
+
     if (changed && ui->power_on) {
         ui->needs_render = true;
     } else if (changed && !ui->power_on) {
@@ -61,6 +78,10 @@ bool ui_controller_tick(ui_controller_t *ui, uint64_t now_ms) {
     /* Update status only in static mode to keep speeds stable */
     if (ui->power_on && !page_controller_is_animating(&ui->page_ctrl) && ui->status_ctx) {
         sys_status_update_local(ui->status_ctx, &ui->status);
+        /* Trigger async service queries if services configured */
+        if (ui->status.service_count > 0) {
+            sys_status_query_services(ui->status_ctx, &ui->status);
+        }
         needs_render = true;
     }
 

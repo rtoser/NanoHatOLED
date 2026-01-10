@@ -34,21 +34,36 @@ typedef struct {
 } mock_response_t;
 
 /*
+ * Request type
+ */
+typedef enum {
+    REQ_TYPE_QUERY,
+    REQ_TYPE_CONTROL,
+} request_type_t;
+
+/*
  * Pending request state
  */
 typedef struct {
     char service[32];
-    ubus_query_cb cb;
+    request_type_t type;
+    union {
+        ubus_query_cb query_cb;
+        ubus_control_cb control_cb;
+    };
     void *priv;
     struct uloop_timeout response_timer;  /* Simulated response delay */
     struct uloop_timeout timeout_timer;   /* Timeout protection */
     bool in_use;
     bool completed;
 
-    /* Resolved response */
+    /* For query: resolved response */
     bool installed;
     bool running;
     int status;
+
+    /* For control: operation type */
+    bool start_op;
 } pending_request_t;
 
 static mock_response_t g_mock_responses[MAX_MOCK_RESPONSES];
@@ -197,8 +212,11 @@ static void response_timer_cb(struct uloop_timeout *t) {
     g_consecutive_timeouts = 0;
 
     /* Invoke callback */
-    if (req->cb) {
-        req->cb(req->service, req->installed, req->running, req->status, req->priv);
+    if (req->type == REQ_TYPE_QUERY && req->query_cb) {
+        req->query_cb(req->service, req->installed, req->running, req->status, req->priv);
+    } else if (req->type == REQ_TYPE_CONTROL && req->control_cb) {
+        bool success = (req->status == UBUS_HAL_STATUS_OK);
+        req->control_cb(req->service, success, req->status, req->priv);
     }
 
     /* Release slot */
@@ -220,8 +238,10 @@ static void timeout_timer_cb(struct uloop_timeout *t) {
     g_consecutive_timeouts++;
 
     /* Invoke callback with timeout status */
-    if (req->cb) {
-        req->cb(req->service, false, false, UBUS_HAL_STATUS_TIMEOUT, req->priv);
+    if (req->type == REQ_TYPE_QUERY && req->query_cb) {
+        req->query_cb(req->service, false, false, UBUS_HAL_STATUS_TIMEOUT, req->priv);
+    } else if (req->type == REQ_TYPE_CONTROL && req->control_cb) {
+        req->control_cb(req->service, false, UBUS_HAL_STATUS_TIMEOUT, req->priv);
     }
 
     /* Release slot */
@@ -284,7 +304,8 @@ static int mock_query_service_async(const char *name, ubus_query_cb cb, void *pr
     /* Copy service name */
     strncpy(req->service, name, sizeof(req->service) - 1);
     req->service[sizeof(req->service) - 1] = '\0';
-    req->cb = cb;
+    req->type = REQ_TYPE_QUERY;
+    req->query_cb = cb;
     req->priv = priv;
 
     /* Look up mock response */
@@ -320,11 +341,45 @@ static int mock_query_services_async(const char **names, size_t count,
     return 0;
 }
 
+static int mock_control_service_async(const char *name, bool start,
+                                       ubus_control_cb cb, void *priv) {
+    if (!g_initialized || !name || !cb) return -1;
+
+    pending_request_t *req = alloc_request();
+    if (!req) {
+        cb(name, false, UBUS_HAL_STATUS_ERROR, priv);
+        return 0;
+    }
+
+    /* Copy service name */
+    strncpy(req->service, name, sizeof(req->service) - 1);
+    req->service[sizeof(req->service) - 1] = '\0';
+    req->type = REQ_TYPE_CONTROL;
+    req->control_cb = cb;
+    req->priv = priv;
+    req->start_op = start;
+
+    /* Use default response settings for control */
+    const mock_response_t *resp = find_response(name);
+    req->status = resp->status;
+
+    /* Start timeout timer */
+    uloop_timeout_set(&req->timeout_timer, g_timeout_ms);
+
+    /* Schedule response callback */
+    if (resp->delay_ms != MOCK_DELAY_HANG) {
+        uloop_timeout_set(&req->response_timer, resp->delay_ms);
+    }
+
+    return 0;
+}
+
 static const ubus_hal_ops_t mock_ops = {
     .init = mock_init,
     .cleanup = mock_cleanup,
     .query_service_async = mock_query_service_async,
     .query_services_async = mock_query_services_async,
+    .control_service_async = mock_control_service_async,
 };
 
 const ubus_hal_ops_t *ubus_hal = &mock_ops;

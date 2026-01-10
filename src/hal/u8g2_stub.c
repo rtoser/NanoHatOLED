@@ -22,6 +22,10 @@ void u8g2_DrawBox(u8g2_t *u8g2, int x, int y, int w, int h) {
     (void)u8g2; (void)x; (void)y; (void)w; (void)h;
 }
 
+void u8g2_DrawFrame(u8g2_t *u8g2, int x, int y, int w, int h) {
+    (void)u8g2; (void)x; (void)y; (void)w; (void)h;
+}
+
 void u8g2_SetDrawColor(u8g2_t *u8g2, int color) {
     if (u8g2) u8g2->draw_color = color;
 }

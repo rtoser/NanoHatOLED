@@ -3,7 +3,7 @@ set -euo pipefail
 
 TARGET_IP="${TARGET_IP:-192.168.33.254}"
 TARGET_USER="${TARGET_USER:-root}"
-BIN_SRC="${BIN_SRC:-src/nanohat-oled}"
+BIN_SRC="${BIN_SRC:-src/build/target/nanohat-oled}"
 INIT_SRC="${INIT_SRC:-src/nanohat-oled.init}"
 SSH_OPTS="${SSH_OPTS:-"-o BatchMode=yes -o StrictHostKeyChecking=accept-new"}"
 

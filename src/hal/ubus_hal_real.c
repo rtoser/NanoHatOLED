@@ -21,20 +21,35 @@
 #define DEFAULT_TIMEOUT_MS   3000
 
 /*
+ * Request type
+ */
+typedef enum {
+    REQ_TYPE_QUERY,
+    REQ_TYPE_CONTROL,
+} request_type_t;
+
+/*
  * Pending request state - must persist until complete_cb or timeout
  */
 typedef struct pending_request {
     struct ubus_request req;
     struct uloop_timeout timeout;
     char service[32];
-    ubus_query_cb cb;
+    request_type_t type;
+    union {
+        ubus_query_cb query_cb;
+        ubus_control_cb control_cb;
+    };
     void *priv;
     bool in_use;
     bool completed;  /* Set when complete_cb called, prevents double-free */
 
-    /* Parsed response */
+    /* For query: parsed response */
     bool installed;
     bool running;
+
+    /* For control: operation type */
+    bool start_op;
 } pending_request_t;
 
 static struct ubus_context *g_ctx = NULL;
@@ -127,8 +142,10 @@ static void request_timeout_cb(struct uloop_timeout *t) {
     }
 
     /* Invoke user callback with timeout status */
-    if (preq->cb) {
-        preq->cb(preq->service, false, false, UBUS_HAL_STATUS_TIMEOUT, preq->priv);
+    if (preq->type == REQ_TYPE_QUERY && preq->query_cb) {
+        preq->query_cb(preq->service, false, false, UBUS_HAL_STATUS_TIMEOUT, preq->priv);
+    } else if (preq->type == REQ_TYPE_CONTROL && preq->control_cb) {
+        preq->control_cb(preq->service, false, UBUS_HAL_STATUS_TIMEOUT, preq->priv);
     }
 
     /* Release slot */
@@ -151,6 +168,11 @@ static void query_data_cb(struct ubus_request *req, int type, struct blob_attr *
 
     blobmsg_for_each_attr(svc_attr, msg, rem) {
         if (blobmsg_type(svc_attr) != BLOBMSG_TYPE_TABLE) continue;
+
+        const char *svc_name = blobmsg_name(svc_attr);
+        if (!svc_name || strcmp(svc_name, preq->service) != 0) {
+            continue;
+        }
 
         /* Service exists in rc */
         preq->installed = true;
@@ -214,8 +236,11 @@ static void query_complete_cb(struct ubus_request *req, int ret) {
     }
 
     /* Invoke user callback */
-    if (preq->cb) {
-        preq->cb(preq->service, preq->installed, preq->running, status, preq->priv);
+    if (preq->type == REQ_TYPE_QUERY && preq->query_cb) {
+        preq->query_cb(preq->service, preq->installed, preq->running, status, preq->priv);
+    } else if (preq->type == REQ_TYPE_CONTROL && preq->control_cb) {
+        bool success = (status == UBUS_HAL_STATUS_OK);
+        preq->control_cb(preq->service, success, status, preq->priv);
     }
 
     /* Release slot */
@@ -244,8 +269,10 @@ static void abort_all_pending(int status) {
             if (g_ctx) {
                 ubus_abort_request(g_ctx, &preq->req);
             }
-            if (preq->cb) {
-                preq->cb(preq->service, false, false, status, preq->priv);
+            if (preq->type == REQ_TYPE_QUERY && preq->query_cb) {
+                preq->query_cb(preq->service, false, false, status, preq->priv);
+            } else if (preq->type == REQ_TYPE_CONTROL && preq->control_cb) {
+                preq->control_cb(preq->service, false, status, preq->priv);
             }
             preq->in_use = false;
         }
@@ -358,7 +385,8 @@ static int real_query_service_async(const char *name, ubus_query_cb cb, void *pr
     /* Store request info */
     strncpy(preq->service, name, sizeof(preq->service) - 1);
     preq->service[sizeof(preq->service) - 1] = '\0';
-    preq->cb = cb;
+    preq->type = REQ_TYPE_QUERY;
+    preq->query_cb = cb;
     preq->priv = priv;
     preq->installed = false;
     preq->running = false;
@@ -410,11 +438,64 @@ static int real_query_services_async(const char **names, size_t count,
     return 0;
 }
 
+static int real_control_service_async(const char *name, bool start,
+                                       ubus_control_cb cb, void *priv) {
+    if (!g_initialized || !name || !cb) return -1;
+
+    if (ensure_rc_id() < 0) {
+        cb(name, false, UBUS_HAL_STATUS_CONN_FAILED, priv);
+        return 0;
+    }
+
+    pending_request_t *preq = alloc_request();
+    if (!preq) {
+        cb(name, false, UBUS_HAL_STATUS_ERROR, priv);
+        return 0;
+    }
+
+    /* Store request info */
+    strncpy(preq->service, name, sizeof(preq->service) - 1);
+    preq->service[sizeof(preq->service) - 1] = '\0';
+    preq->type = REQ_TYPE_CONTROL;
+    preq->control_cb = cb;
+    preq->priv = priv;
+    preq->start_op = start;
+
+    /* Build request: rc init {"name":"xxx","action":"start|stop"} */
+    struct blob_buf b = {0};
+    blob_buf_init(&b, 0);
+    blobmsg_add_string(&b, "name", name);
+    blobmsg_add_string(&b, "action", start ? "start" : "stop");
+
+    /* Initiate async request */
+    int ret = ubus_invoke_async(g_ctx, g_rc_id, "init", b.head, &preq->req);
+    if (ret) {
+        blob_buf_free(&b);
+        release_request(preq);
+        cb(name, false, UBUS_HAL_STATUS_ERROR, priv);
+        return 0;
+    }
+
+    /* Set callbacks - control doesn't need data_cb */
+    preq->req.data_cb = NULL;
+    preq->req.complete_cb = query_complete_cb;
+
+    /* Complete request setup */
+    ubus_complete_request_async(g_ctx, &preq->req);
+
+    /* Start timeout timer */
+    uloop_timeout_set(&preq->timeout, DEFAULT_TIMEOUT_MS);
+
+    blob_buf_free(&b);
+    return 0;
+}
+
 static const ubus_hal_ops_t real_ops = {
     .init = real_init,
     .cleanup = real_cleanup,
     .query_service_async = real_query_service_async,
     .query_services_async = real_query_services_async,
+    .control_service_async = real_control_service_async,
 };
 
 const ubus_hal_ops_t *ubus_hal = &real_ops;

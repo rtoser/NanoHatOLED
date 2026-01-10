@@ -191,6 +191,19 @@ test_ui_refresh_policy/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_refresh_policy.dir/build.make CMakeFiles/test_ui_refresh_policy.dir/build
 .PHONY : test_ui_refresh_policy/fast
 
+#=============================================================================
+# Target rules for targets named test_ubus_async_uloop
+
+# Build rule for target.
+test_ubus_async_uloop: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test_ubus_async_uloop
+.PHONY : test_ubus_async_uloop
+
+# fast build rule for target.
+test_ubus_async_uloop/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ubus_async_uloop.dir/build.make CMakeFiles/test_ubus_async_uloop.dir/build
+.PHONY : test_ubus_async_uloop/fast
+
 repo/src/anim.o: repo/src/anim.c.o
 .PHONY : repo/src/anim.o
 
@@ -277,6 +290,7 @@ repo/src/hal/time_hal_real.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_gpio_event_uloop.dir/build.make CMakeFiles/test_gpio_event_uloop.dir/repo/src/hal/time_hal_real.c.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_controller.dir/build.make CMakeFiles/test_ui_controller.dir/repo/src/hal/time_hal_real.c.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_refresh_policy.dir/build.make CMakeFiles/test_ui_refresh_policy.dir/repo/src/hal/time_hal_real.c.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ubus_async_uloop.dir/build.make CMakeFiles/test_ubus_async_uloop.dir/repo/src/hal/time_hal_real.c.o
 .PHONY : repo/src/hal/time_hal_real.c.o
 
 repo/src/hal/time_hal_real.i: repo/src/hal/time_hal_real.c.i
@@ -287,6 +301,7 @@ repo/src/hal/time_hal_real.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_gpio_event_uloop.dir/build.make CMakeFiles/test_gpio_event_uloop.dir/repo/src/hal/time_hal_real.c.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_controller.dir/build.make CMakeFiles/test_ui_controller.dir/repo/src/hal/time_hal_real.c.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_refresh_policy.dir/build.make CMakeFiles/test_ui_refresh_policy.dir/repo/src/hal/time_hal_real.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ubus_async_uloop.dir/build.make CMakeFiles/test_ubus_async_uloop.dir/repo/src/hal/time_hal_real.c.i
 .PHONY : repo/src/hal/time_hal_real.c.i
 
 repo/src/hal/time_hal_real.s: repo/src/hal/time_hal_real.c.s
@@ -297,6 +312,7 @@ repo/src/hal/time_hal_real.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_gpio_event_uloop.dir/build.make CMakeFiles/test_gpio_event_uloop.dir/repo/src/hal/time_hal_real.c.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_controller.dir/build.make CMakeFiles/test_ui_controller.dir/repo/src/hal/time_hal_real.c.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_refresh_policy.dir/build.make CMakeFiles/test_ui_refresh_policy.dir/repo/src/hal/time_hal_real.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ubus_async_uloop.dir/build.make CMakeFiles/test_ubus_async_uloop.dir/repo/src/hal/time_hal_real.c.s
 .PHONY : repo/src/hal/time_hal_real.c.s
 
 repo/src/hal/u8g2_stub.o: repo/src/hal/u8g2_stub.c.o
@@ -325,6 +341,36 @@ repo/src/hal/u8g2_stub.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_controller.dir/build.make CMakeFiles/test_ui_controller.dir/repo/src/hal/u8g2_stub.c.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_refresh_policy.dir/build.make CMakeFiles/test_ui_refresh_policy.dir/repo/src/hal/u8g2_stub.c.s
 .PHONY : repo/src/hal/u8g2_stub.c.s
+
+repo/src/hal/ubus_hal_mock.o: repo/src/hal/ubus_hal_mock.c.o
+.PHONY : repo/src/hal/ubus_hal_mock.o
+
+# target to build an object file
+repo/src/hal/ubus_hal_mock.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_controller.dir/build.make CMakeFiles/test_ui_controller.dir/repo/src/hal/ubus_hal_mock.c.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_refresh_policy.dir/build.make CMakeFiles/test_ui_refresh_policy.dir/repo/src/hal/ubus_hal_mock.c.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ubus_async_uloop.dir/build.make CMakeFiles/test_ubus_async_uloop.dir/repo/src/hal/ubus_hal_mock.c.o
+.PHONY : repo/src/hal/ubus_hal_mock.c.o
+
+repo/src/hal/ubus_hal_mock.i: repo/src/hal/ubus_hal_mock.c.i
+.PHONY : repo/src/hal/ubus_hal_mock.i
+
+# target to preprocess a source file
+repo/src/hal/ubus_hal_mock.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_controller.dir/build.make CMakeFiles/test_ui_controller.dir/repo/src/hal/ubus_hal_mock.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_refresh_policy.dir/build.make CMakeFiles/test_ui_refresh_policy.dir/repo/src/hal/ubus_hal_mock.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ubus_async_uloop.dir/build.make CMakeFiles/test_ubus_async_uloop.dir/repo/src/hal/ubus_hal_mock.c.i
+.PHONY : repo/src/hal/ubus_hal_mock.c.i
+
+repo/src/hal/ubus_hal_mock.s: repo/src/hal/ubus_hal_mock.c.s
+.PHONY : repo/src/hal/ubus_hal_mock.s
+
+# target to generate assembly for a file
+repo/src/hal/ubus_hal_mock.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_controller.dir/build.make CMakeFiles/test_ui_controller.dir/repo/src/hal/ubus_hal_mock.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_refresh_policy.dir/build.make CMakeFiles/test_ui_refresh_policy.dir/repo/src/hal/ubus_hal_mock.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ubus_async_uloop.dir/build.make CMakeFiles/test_ubus_async_uloop.dir/repo/src/hal/ubus_hal_mock.c.s
+.PHONY : repo/src/hal/ubus_hal_mock.c.s
 
 repo/src/page_controller.o: repo/src/page_controller.c.o
 .PHONY : repo/src/page_controller.o
@@ -468,6 +514,7 @@ repo/src/service_config.o: repo/src/service_config.c.o
 repo/src/service_config.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_controller.dir/build.make CMakeFiles/test_ui_controller.dir/repo/src/service_config.c.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_refresh_policy.dir/build.make CMakeFiles/test_ui_refresh_policy.dir/repo/src/service_config.c.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ubus_async_uloop.dir/build.make CMakeFiles/test_ubus_async_uloop.dir/repo/src/service_config.c.o
 .PHONY : repo/src/service_config.c.o
 
 repo/src/service_config.i: repo/src/service_config.c.i
@@ -477,6 +524,7 @@ repo/src/service_config.i: repo/src/service_config.c.i
 repo/src/service_config.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_controller.dir/build.make CMakeFiles/test_ui_controller.dir/repo/src/service_config.c.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_refresh_policy.dir/build.make CMakeFiles/test_ui_refresh_policy.dir/repo/src/service_config.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ubus_async_uloop.dir/build.make CMakeFiles/test_ubus_async_uloop.dir/repo/src/service_config.c.i
 .PHONY : repo/src/service_config.c.i
 
 repo/src/service_config.s: repo/src/service_config.c.s
@@ -486,6 +534,7 @@ repo/src/service_config.s: repo/src/service_config.c.s
 repo/src/service_config.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_controller.dir/build.make CMakeFiles/test_ui_controller.dir/repo/src/service_config.c.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_refresh_policy.dir/build.make CMakeFiles/test_ui_refresh_policy.dir/repo/src/service_config.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ubus_async_uloop.dir/build.make CMakeFiles/test_ubus_async_uloop.dir/repo/src/service_config.c.s
 .PHONY : repo/src/service_config.c.s
 
 repo/src/sys_status.o: repo/src/sys_status.c.o
@@ -495,6 +544,7 @@ repo/src/sys_status.o: repo/src/sys_status.c.o
 repo/src/sys_status.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_controller.dir/build.make CMakeFiles/test_ui_controller.dir/repo/src/sys_status.c.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_refresh_policy.dir/build.make CMakeFiles/test_ui_refresh_policy.dir/repo/src/sys_status.c.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ubus_async_uloop.dir/build.make CMakeFiles/test_ubus_async_uloop.dir/repo/src/sys_status.c.o
 .PHONY : repo/src/sys_status.c.o
 
 repo/src/sys_status.i: repo/src/sys_status.c.i
@@ -504,6 +554,7 @@ repo/src/sys_status.i: repo/src/sys_status.c.i
 repo/src/sys_status.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_controller.dir/build.make CMakeFiles/test_ui_controller.dir/repo/src/sys_status.c.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_refresh_policy.dir/build.make CMakeFiles/test_ui_refresh_policy.dir/repo/src/sys_status.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ubus_async_uloop.dir/build.make CMakeFiles/test_ubus_async_uloop.dir/repo/src/sys_status.c.i
 .PHONY : repo/src/sys_status.c.i
 
 repo/src/sys_status.s: repo/src/sys_status.c.s
@@ -513,6 +564,7 @@ repo/src/sys_status.s: repo/src/sys_status.c.s
 repo/src/sys_status.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_controller.dir/build.make CMakeFiles/test_ui_controller.dir/repo/src/sys_status.c.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_refresh_policy.dir/build.make CMakeFiles/test_ui_refresh_policy.dir/repo/src/sys_status.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ubus_async_uloop.dir/build.make CMakeFiles/test_ubus_async_uloop.dir/repo/src/sys_status.c.s
 .PHONY : repo/src/sys_status.c.s
 
 repo/src/ui_controller.o: repo/src/ui_controller.c.o
@@ -541,6 +593,33 @@ repo/src/ui_controller.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_controller.dir/build.make CMakeFiles/test_ui_controller.dir/repo/src/ui_controller.c.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_refresh_policy.dir/build.make CMakeFiles/test_ui_refresh_policy.dir/repo/src/ui_controller.c.s
 .PHONY : repo/src/ui_controller.c.s
+
+repo/src/ui_draw.o: repo/src/ui_draw.c.o
+.PHONY : repo/src/ui_draw.o
+
+# target to build an object file
+repo/src/ui_draw.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_controller.dir/build.make CMakeFiles/test_ui_controller.dir/repo/src/ui_draw.c.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_refresh_policy.dir/build.make CMakeFiles/test_ui_refresh_policy.dir/repo/src/ui_draw.c.o
+.PHONY : repo/src/ui_draw.c.o
+
+repo/src/ui_draw.i: repo/src/ui_draw.c.i
+.PHONY : repo/src/ui_draw.i
+
+# target to preprocess a source file
+repo/src/ui_draw.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_controller.dir/build.make CMakeFiles/test_ui_controller.dir/repo/src/ui_draw.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_refresh_policy.dir/build.make CMakeFiles/test_ui_refresh_policy.dir/repo/src/ui_draw.c.i
+.PHONY : repo/src/ui_draw.c.i
+
+repo/src/ui_draw.s: repo/src/ui_draw.c.s
+.PHONY : repo/src/ui_draw.s
+
+# target to generate assembly for a file
+repo/src/ui_draw.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_controller.dir/build.make CMakeFiles/test_ui_controller.dir/repo/src/ui_draw.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ui_refresh_policy.dir/build.make CMakeFiles/test_ui_refresh_policy.dir/repo/src/ui_draw.c.s
+.PHONY : repo/src/ui_draw.c.s
 
 test_gpio_event_uloop.o: test_gpio_event_uloop.c.o
 .PHONY : test_gpio_event_uloop.o
@@ -589,6 +668,30 @@ test_timer_basic.s: test_timer_basic.c.s
 test_timer_basic.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_timer_basic.dir/build.make CMakeFiles/test_timer_basic.dir/test_timer_basic.c.s
 .PHONY : test_timer_basic.c.s
+
+test_ubus_async_uloop.o: test_ubus_async_uloop.c.o
+.PHONY : test_ubus_async_uloop.o
+
+# target to build an object file
+test_ubus_async_uloop.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ubus_async_uloop.dir/build.make CMakeFiles/test_ubus_async_uloop.dir/test_ubus_async_uloop.c.o
+.PHONY : test_ubus_async_uloop.c.o
+
+test_ubus_async_uloop.i: test_ubus_async_uloop.c.i
+.PHONY : test_ubus_async_uloop.i
+
+# target to preprocess a source file
+test_ubus_async_uloop.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ubus_async_uloop.dir/build.make CMakeFiles/test_ubus_async_uloop.dir/test_ubus_async_uloop.c.i
+.PHONY : test_ubus_async_uloop.c.i
+
+test_ubus_async_uloop.s: test_ubus_async_uloop.c.s
+.PHONY : test_ubus_async_uloop.s
+
+# target to generate assembly for a file
+test_ubus_async_uloop.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_ubus_async_uloop.dir/build.make CMakeFiles/test_ubus_async_uloop.dir/test_ubus_async_uloop.c.s
+.PHONY : test_ubus_async_uloop.c.s
 
 test_ui_controller.o: test_ui_controller.c.o
 .PHONY : test_ui_controller.o
@@ -673,6 +776,7 @@ help:
 	@echo "... test"
 	@echo "... test_gpio_event_uloop"
 	@echo "... test_timer_basic"
+	@echo "... test_ubus_async_uloop"
 	@echo "... test_ui_controller"
 	@echo "... test_ui_refresh_policy"
 	@echo "... test_uloop_smoke"
@@ -691,6 +795,9 @@ help:
 	@echo "... repo/src/hal/u8g2_stub.o"
 	@echo "... repo/src/hal/u8g2_stub.i"
 	@echo "... repo/src/hal/u8g2_stub.s"
+	@echo "... repo/src/hal/ubus_hal_mock.o"
+	@echo "... repo/src/hal/ubus_hal_mock.i"
+	@echo "... repo/src/hal/ubus_hal_mock.s"
 	@echo "... repo/src/page_controller.o"
 	@echo "... repo/src/page_controller.i"
 	@echo "... repo/src/page_controller.s"
@@ -715,12 +822,18 @@ help:
 	@echo "... repo/src/ui_controller.o"
 	@echo "... repo/src/ui_controller.i"
 	@echo "... repo/src/ui_controller.s"
+	@echo "... repo/src/ui_draw.o"
+	@echo "... repo/src/ui_draw.i"
+	@echo "... repo/src/ui_draw.s"
 	@echo "... test_gpio_event_uloop.o"
 	@echo "... test_gpio_event_uloop.i"
 	@echo "... test_gpio_event_uloop.s"
 	@echo "... test_timer_basic.o"
 	@echo "... test_timer_basic.i"
 	@echo "... test_timer_basic.s"
+	@echo "... test_ubus_async_uloop.o"
+	@echo "... test_ubus_async_uloop.i"
+	@echo "... test_ubus_async_uloop.s"
 	@echo "... test_ui_controller.o"
 	@echo "... test_ui_controller.i"
 	@echo "... test_ui_controller.s"

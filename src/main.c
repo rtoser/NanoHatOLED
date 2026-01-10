@@ -10,6 +10,7 @@
 #include "hal/display_hal.h"
 #include "hal/gpio_hal.h"
 #include "hal/time_hal.h"
+#include "hal/ubus_hal.h"
 #include "ui_controller.h"
 
 #define APP_NAME "nanohat-oled"
@@ -152,7 +153,12 @@ int main(void) {
         return 1;
     }
 
-    /* 3. Register signal handlers via uloop (async-signal-safe) */
+    /* 3. Initialize ubus HAL (lazy connect, non-fatal) */
+    if (ubus_hal && ubus_hal->init) {
+        ubus_hal->init();
+    }
+
+    /* 4. Register signal handlers via uloop (async-signal-safe) */
     sig_term.cb = handle_signal;
     sig_term.signo = SIGTERM;
     if (uloop_signal_add(&sig_term) < 0) {
@@ -165,7 +171,7 @@ int main(void) {
         fprintf(stderr, "WARN: failed to register SIGINT handler\n");
     }
 
-    /* 4. Register GPIO fd with uloop */
+    /* 5. Register GPIO fd with uloop */
     int gpio_fd = gpio_hal->get_fd();
     if (gpio_fd >= 0) {
         gpio_uloop_fd.fd = gpio_fd;
@@ -195,12 +201,15 @@ int main(void) {
     ui_controller_render(&g_ui, now_ms);
     schedule_ui_timer();
 
-    /* 5. Run main event loop */
+    /* 6. Run main event loop */
     printf("%s started\n", APP_NAME);
     uloop_run();
 
-    /* 6. Cleanup */
+    /* 7. Cleanup (ubus before uloop_done to avoid resource leak) */
     printf("%s shutting down...\n", APP_NAME);
+    if (ubus_hal && ubus_hal->cleanup) {
+        ubus_hal->cleanup();
+    }
     uloop_done();
     ui_controller_cleanup(&g_ui);
     cleanup_hal();

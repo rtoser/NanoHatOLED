@@ -55,6 +55,11 @@ typedef struct sys_status {
 typedef struct sys_status_ctx sys_status_ctx_t;
 
 /*
+ * Callback for control operation completion.
+ */
+typedef void (*sys_status_control_cb)(int index, bool success, int status, void *priv);
+
+/*
  * Initialize sys_status context.
  */
 sys_status_ctx_t *sys_status_init(void);
@@ -99,5 +104,18 @@ int sys_status_query_services(sys_status_ctx_t *ctx, sys_status_t *status);
  * Check if any service queries are pending.
  */
 bool sys_status_has_pending_queries(const sys_status_t *status);
+
+/*
+ * Control a service (start/stop) asynchronously.
+ *
+ * @param ctx       sys_status context
+ * @param status    sys_status to update
+ * @param index     Service index in status->services
+ * @param start     true to start, false to stop
+ * @return 0 on success, -1 on error
+ */
+int sys_status_control_service(sys_status_ctx_t *ctx, sys_status_t *status,
+                                int index, bool start,
+                                sys_status_control_cb cb, void *priv);
 
 #endif

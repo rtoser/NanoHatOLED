@@ -53,6 +53,38 @@ Keep the hardware abstraction layer to support:
 - Single-threaded uloop with async ubus
 - Simpler tick model via `uloop_timeout`
 
+## Service Control Architecture
+
+### Design Principle
+
+Pages produce **intent**, not state mutations. State is owned by `sys_status`.
+
+### Control Flow
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  page_services  │────►│  ui_controller   │────►│   sys_status    │
+│                 │     │                  │     │                 │
+│ - on_key()      │     │ - handle_button()│     │ - control_      │
+│ - sets pending  │     │ - take_request() │     │   service()     │
+│   control intent│     │ - delegates to   │     │ - ubus_hal      │
+└─────────────────┘     │   sys_status     │     │   async invoke  │
+        ▲               └──────────────────┘     └────────┬────────┘
+        │                                                  │
+        │              ┌──────────────────┐                │
+        └──────────────│  control callback │◄──────────────┘
+                       │  notify_result()  │
+                       └──────────────────┘
+```
+
+### Key Points
+
+- Page **never** writes `status->services[]` directly
+- Control success updates `running` in `sys_status` callback (optimistic update)
+- UI state (STARTING/STOPPING blink) auto-clears when actual state matches expectation
+- Control failure triggers `SVC_UI_ERROR` via `notify_result()`
+- Force query refresh after control to ensure eventual consistency
+
 ## Error Handling Strategy
 
 - uloop 回调返回错误时记录日志并降级（例如保留上次渲染/状态，不阻塞主循环）。

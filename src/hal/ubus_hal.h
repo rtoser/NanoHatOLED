@@ -39,6 +39,17 @@ typedef void (*ubus_query_cb)(const char *service, bool installed,
                                bool running, int status, void *priv);
 
 /*
+ * Control callback - invoked when async control operation completes.
+ *
+ * @param service   Service name that was controlled
+ * @param success   true if operation succeeded
+ * @param status    UBUS_HAL_STATUS_* code
+ * @param priv      User-provided context
+ */
+typedef void (*ubus_control_cb)(const char *service, bool success,
+                                 int status, void *priv);
+
+/*
  * ubus HAL operations
  */
 typedef struct {
@@ -86,6 +97,18 @@ typedef struct {
      */
     int (*query_services_async)(const char **names, size_t count,
                                  ubus_query_cb cb, void *priv);
+
+    /*
+     * Start or stop a service asynchronously.
+     *
+     * @param name      Service name (e.g., "dropbear")
+     * @param start     true to start, false to stop
+     * @param cb        Callback invoked on completion
+     * @param priv      User context
+     * @return 0 on success (callback will be invoked), -1 on invalid args
+     */
+    int (*control_service_async)(const char *name, bool start,
+                                  ubus_control_cb cb, void *priv);
 } ubus_hal_ops_t;
 
 /*

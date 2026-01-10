@@ -43,17 +43,19 @@ static void network_render(u8g2_t *u8g2, const sys_status_t *status,
              status->ip_addr[0] ? status->ip_addr : "No IP");
     ui_draw_str(u8g2, x, LINE1_Y, buf);
 
-    /* Line 2: RX */
+    /* Line 2: RX - label left, speed right-aligned */
     char rx_speed[16];
     sys_status_format_speed_bps(status->rx_speed, rx_speed, sizeof(rx_speed));
-    snprintf(buf, sizeof(buf), "RX: %s", rx_speed);
-    ui_draw_str(u8g2, x, LINE2_Y, buf);
+    ui_draw_str(u8g2, x, LINE2_Y, "RX:");
+    int rx_width = u8g2_GetStrWidth(u8g2, rx_speed);
+    ui_draw_str(u8g2, x_offset + SCREEN_WIDTH - MARGIN_RIGHT - rx_width, LINE2_Y, rx_speed);
 
-    /* Line 3: TX */
+    /* Line 3: TX - label left, speed right-aligned */
     char tx_speed[16];
     sys_status_format_speed_bps(status->tx_speed, tx_speed, sizeof(tx_speed));
-    snprintf(buf, sizeof(buf), "TX: %s", tx_speed);
-    ui_draw_str(u8g2, x, LINE3_Y, buf);
+    ui_draw_str(u8g2, x, LINE3_Y, "TX:");
+    int tx_width = u8g2_GetStrWidth(u8g2, tx_speed);
+    ui_draw_str(u8g2, x_offset + SCREEN_WIDTH - MARGIN_RIGHT - tx_width, LINE3_Y, tx_speed);
 }
 
 const page_t page_network = {

@@ -155,7 +155,7 @@
 
 ## Phase 4 ubus 异步接入（单线程）
 
-**状态**：🚧 进行中
+**状态**：✅ 已完成
 
 **任务**
 - [x] 设计 ubus HAL 异步接口（精简版）
@@ -213,12 +213,54 @@ void ubus_mock_set_timeout(int timeout_ms);  /* 配置超时阈值 */
 
 ## Phase 5 集成调优
 
-**状态**：待开始
+**状态**：🚧 进行中
 
 **任务**
-- 端到端功能验证
-- 性能/稳定性测试
-- 清理 ADR0005 专用代码与文档指向
+- [x] 集成 ubus_hal 到 main.c（init/cleanup 调用顺序）
+- [x] 集成 sys_status_query_services() 到 ui_controller.c
+- [x] Docker 交叉编译验证
+- [x] 服务控制功能（start/stop via ubus rc init）
+- [x] 确认对话框（默认 No，K1/K3 切换，K2 确认）
+- [x] 进入模式自动超时（60 秒）
+- [x] 服务状态图标优化（查询态 ▷/□）
+- [ ] Target 硬件验证
+- [ ] 端到端功能验证
+- [ ] 性能/稳定性测试
+- [ ] 清理 ADR0005 专用代码与文档指向
+
+**设计决策**
+- 页面不改状态：page 只产生控制意图（`pending_control_index`），状态更新由 `sys_status` 负责
+- 回调链：`ubus_hal` → `sys_status` → `ui_controller` → `page_services`
+- 乐观更新：控制成功时立即更新 `running`，同时强制刷新查询（`last_update_ms = 0`）
+- ubus 控制方法：`rc init {"name":"xxx","action":"start|stop"}`（非 start/stop 独立方法）
+
+**实际产出**
+- `src/pages/page_services.h` - 控制意图接口（`take_control_request` / `notify_control_result`）
+- `src/pages/page_services.c` - 确认对话框、闪动效果、意图生产
+- `src/ui_controller.c` - 消费控制请求、委托 sys_status、失败回调
+- `src/sys_status.h` - `sys_status_control_service()` 增加回调参数
+- `src/sys_status.c` - 控制实现、乐观更新、强制刷新
+- `src/hal/ubus_hal.h` - `control_service_async()` 接口
+- `src/hal/ubus_hal_real.c` - `rc init` 方法实现 + 服务名过滤
+- `src/page_controller.c` - 进入模式自动超时
+- `docs/adr0006/ui-design-spec.md` - 对话框布局、图标状态表、超时规范
+
+**Target 验证清单**
+```bash
+# 部署
+scp src/build/target/nanohat-oled root@<device>:/tmp/
+
+# 运行
+/tmp/nanohat-oled
+
+# 验证服务状态
+ubus list | grep rc
+ubus call rc list
+
+# 测试 rpcd 重启恢复
+service rpcd restart
+# 观察 UI 是否在下一个 tick 恢复
+```
 
 ## 风险与缓解
 
