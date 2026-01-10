@@ -6,6 +6,7 @@
 #include "../anim.h"
 #include "../fonts.h"
 #include "../u8g2_api.h"
+#include "../ui_draw.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -17,7 +18,8 @@
 /* Service status icons */
 #define ICON_RUNNING "\xE2\x96\xB6"  /* ▶ */
 #define ICON_STOPPED "\xE2\x96\xA0"  /* ■ */
-#define ICON_UNKNOWN "?"             /* Unknown/error */
+#define ICON_PENDING "..."           /* Query in progress */
+#define ICON_UNKNOWN "--"            /* Timeout/error */
 
 /* Maximum visible services */
 #define VISIBLE_LINES 3
@@ -65,6 +67,12 @@ static const char *get_service_icon(const service_status_t *svc, svc_ui_state_t 
         return ICON_UNKNOWN;
     }
 
+    /* Query in progress - show pending indicator */
+    if (svc->query_pending) {
+        return ICON_PENDING;
+    }
+
+    /* Query completed but failed (timeout/error) */
     if (!svc->status_valid) {
         return ICON_UNKNOWN;
     }
@@ -73,25 +81,26 @@ static const char *get_service_icon(const service_status_t *svc, svc_ui_state_t 
 }
 
 static void render_service_line(u8g2_t *u8g2, int y, const char *name,
-                                const char *icon, int is_selected, page_mode_t mode) {
+                                const char *icon, int is_selected, page_mode_t mode,
+                                int x_offset) {
     char buf[32];
 
     if (is_selected && mode == PAGE_MODE_ENTER) {
         /* Draw inverted background */
         u8g2_SetDrawColor(u8g2, 1);
-        u8g2_DrawBox(u8g2, 0, y - 12, SCREEN_WIDTH, 14);
+        ui_draw_box(u8g2, x_offset, y - 12, SCREEN_WIDTH, 14);
         u8g2_SetDrawColor(u8g2, 0);
     }
 
     /* Draw service name */
     u8g2_SetFont(u8g2, font_content);
     snprintf(buf, sizeof(buf), "%s", name);
-    u8g2_DrawStr(u8g2, MARGIN_LEFT, y, buf);
+    ui_draw_str(u8g2, MARGIN_LEFT + x_offset, y, buf);
 
     /* Draw status icon (right-aligned) */
     u8g2_SetFont(u8g2, font_symbols);
     int icon_width = u8g2_GetStrWidth(u8g2, icon);
-    u8g2_DrawUTF8(u8g2, SCREEN_WIDTH - MARGIN_RIGHT - icon_width, y, icon);
+    ui_draw_utf8(u8g2, x_offset + SCREEN_WIDTH - MARGIN_RIGHT - icon_width, y, icon);
 
     /* Restore draw color */
     if (is_selected && mode == PAGE_MODE_ENTER) {
@@ -99,12 +108,13 @@ static void render_service_line(u8g2_t *u8g2, int y, const char *name,
     }
 }
 
-static void services_render(u8g2_t *u8g2, const sys_status_t *status, page_mode_t mode, uint64_t now_ms) {
+static void services_render(u8g2_t *u8g2, const sys_status_t *status,
+                            page_mode_t mode, uint64_t now_ms, int x_offset) {
     if (!u8g2) return;
 
     if (!status) {
         u8g2_SetFont(u8g2, font_content);
-        u8g2_DrawStr(u8g2, MARGIN_LEFT, LINE2_Y, "Loading...");
+        ui_draw_str(u8g2, MARGIN_LEFT + x_offset, LINE2_Y, "Loading...");
         return;
     }
 
@@ -113,7 +123,7 @@ static void services_render(u8g2_t *u8g2, const sys_status_t *status, page_mode_
 
     if (service_count == 0) {
         u8g2_SetFont(u8g2, font_content);
-        u8g2_DrawStr(u8g2, MARGIN_LEFT, LINE2_Y, "No services");
+        ui_draw_str(u8g2, MARGIN_LEFT + x_offset, LINE2_Y, "No services");
         return;
     }
 
@@ -125,7 +135,7 @@ static void services_render(u8g2_t *u8g2, const sys_status_t *status, page_mode_
         const char *icon = get_service_icon(svc, state.ui_states[svc_idx], now_ms, svc_idx);
         int is_selected = (svc_idx == state.selected_index);
 
-        render_service_line(u8g2, y_positions[i], svc->name, icon, is_selected, mode);
+        render_service_line(u8g2, y_positions[i], svc->name, icon, is_selected, mode, x_offset);
     }
 
     /* Draw scroll indicators if needed */
@@ -134,12 +144,12 @@ static void services_render(u8g2_t *u8g2, const sys_status_t *status, page_mode_
 
         if (state.scroll_offset > 0) {
             /* Up arrow in title bar area */
-            u8g2_DrawUTF8(u8g2, SCREEN_WIDTH - 10, 12, "\xE2\x96\xB2");
+            ui_draw_utf8(u8g2, x_offset + SCREEN_WIDTH - 10, 12, "\xE2\x96\xB2");
         }
 
         if (state.scroll_offset + VISIBLE_LINES < service_count) {
             /* Down arrow at bottom */
-            u8g2_DrawUTF8(u8g2, SCREEN_WIDTH - 10, SCREEN_HEIGHT - 2, "\xE2\x96\xBC");
+            ui_draw_utf8(u8g2, x_offset + SCREEN_WIDTH - 10, SCREEN_HEIGHT - 2, "\xE2\x96\xBC");
         }
     }
 }

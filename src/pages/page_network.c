@@ -5,6 +5,7 @@
 #include "../sys_status.h"
 #include "../fonts.h"
 #include "../u8g2_api.h"
+#include "../ui_draw.h"
 
 #include <stdio.h>
 
@@ -18,39 +19,41 @@ static const char *network_get_title(const sys_status_t *status) {
     return "Network";
 }
 
-static void network_render(u8g2_t *u8g2, const sys_status_t *status, page_mode_t mode, uint64_t now_ms) {
+static void network_render(u8g2_t *u8g2, const sys_status_t *status,
+                           page_mode_t mode, uint64_t now_ms, int x_offset) {
     (void)mode;
     (void)now_ms;
 
     if (!u8g2) return;
 
     char buf[32];
+    int x = MARGIN_LEFT + x_offset;
 
     u8g2_SetFont(u8g2, font_content);
 
     if (!status) {
-        u8g2_DrawStr(u8g2, MARGIN_LEFT, LINE1_Y, "IP: --");
-        u8g2_DrawStr(u8g2, MARGIN_LEFT, LINE2_Y, "RX: --");
-        u8g2_DrawStr(u8g2, MARGIN_LEFT, LINE3_Y, "TX: --");
+        ui_draw_str(u8g2, x, LINE1_Y, "IP: --");
+        ui_draw_str(u8g2, x, LINE2_Y, "RX: --");
+        ui_draw_str(u8g2, x, LINE3_Y, "TX: --");
         return;
     }
 
     /* Line 1: IP Address */
     snprintf(buf, sizeof(buf), "IP: %s",
              status->ip_addr[0] ? status->ip_addr : "No IP");
-    u8g2_DrawStr(u8g2, MARGIN_LEFT, LINE1_Y, buf);
+    ui_draw_str(u8g2, x, LINE1_Y, buf);
 
     /* Line 2: RX */
     char rx_speed[16];
     sys_status_format_speed_bps(status->rx_speed, rx_speed, sizeof(rx_speed));
     snprintf(buf, sizeof(buf), "RX: %s", rx_speed);
-    u8g2_DrawStr(u8g2, MARGIN_LEFT, LINE2_Y, buf);
+    ui_draw_str(u8g2, x, LINE2_Y, buf);
 
     /* Line 3: TX */
     char tx_speed[16];
     sys_status_format_speed_bps(status->tx_speed, tx_speed, sizeof(tx_speed));
     snprintf(buf, sizeof(buf), "TX: %s", tx_speed);
-    u8g2_DrawStr(u8g2, MARGIN_LEFT, LINE3_Y, buf);
+    ui_draw_str(u8g2, x, LINE3_Y, buf);
 }
 
 const page_t page_network = {

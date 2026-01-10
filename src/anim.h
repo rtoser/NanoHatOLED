@@ -17,7 +17,7 @@ typedef enum {
 } anim_type_t;
 
 /* Animation durations in ms */
-#define ANIM_SLIDE_DURATION_MS   200
+#define ANIM_SLIDE_DURATION_MS   400
 #define ANIM_SHAKE_DURATION_MS   400
 #define ANIM_MODE_DURATION_MS    250
 #define ANIM_BLINK_PERIOD_MS     300

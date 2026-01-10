@@ -10,7 +10,7 @@ BUILD_DIR=${BUILD_DIR:-"$ROOT_DIR/tests/build/target"}
 REMOTE_DIR=${REMOTE_DIR:-/tmp/nanohat-tests}
 SKIP_BUILD=${SKIP_BUILD:-0}
 
-TESTS="test_uloop_smoke test_timer_basic test_gpio_event_uloop test_ui_controller test_ui_refresh_policy"
+TESTS="test_uloop_smoke test_timer_basic test_gpio_event_uloop test_ui_controller test_ui_refresh_policy test_ubus_async_uloop"
 
 if [ "$SKIP_BUILD" != "1" ]; then
     echo "== Building target unit tests (Docker) =="

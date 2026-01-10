@@ -34,7 +34,8 @@ typedef struct page {
 
     /* Rendering - return title string, NULL uses default */
     const char *(*get_title)(const sys_status_t *status);
-    void (*render)(u8g2_t *u8g2, const sys_status_t *status, page_mode_t mode, uint64_t now_ms);
+    void (*render)(u8g2_t *u8g2, const sys_status_t *status,
+                   page_mode_t mode, uint64_t now_ms, int x_offset);
 
     /* Key events - return true if handled */
     bool (*on_key)(uint8_t key, bool long_press, page_mode_t mode);

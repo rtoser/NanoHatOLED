@@ -38,6 +38,7 @@ else()
     # Common UI sources (host uses stub display)
     set(UI_SOURCES
         ${SRC_DIR}/ui_controller.c
+        ${SRC_DIR}/ui_draw.c
         ${SRC_DIR}/page_controller.c
         ${SRC_DIR}/anim.c
         ${SRC_DIR}/sys_status.c
@@ -49,6 +50,7 @@ else()
         ${SRC_DIR}/hal/display_hal_null.c
         ${SRC_DIR}/hal/u8g2_stub.c
         ${SRC_DIR}/hal/time_hal_real.c
+        ${SRC_DIR}/hal/ubus_hal_mock.c
     )
 
     # Test: uloop smoke test
@@ -123,6 +125,23 @@ else()
         pthread
     )
 
+    # Test: ubus async with uloop
+    add_executable(test_ubus_async_uloop
+        test_ubus_async_uloop.c
+        ${SRC_DIR}/hal/ubus_hal_mock.c
+        ${SRC_DIR}/hal/time_hal_real.c
+        ${SRC_DIR}/sys_status.c
+        ${SRC_DIR}/service_config.c
+    )
+    target_include_directories(test_ubus_async_uloop PRIVATE
+        ${SRC_DIR}
+        ${SRC_DIR}/hal
+        ${LIBUBOX_INCLUDE_DIR}
+    )
+    target_link_libraries(test_ubus_async_uloop
+        ${LIBUBOX_LIBRARY}
+    )
+
     # Custom test target
     enable_testing()
     add_test(NAME uloop_smoke COMMAND test_uloop_smoke)
@@ -130,6 +149,7 @@ else()
     add_test(NAME gpio_event_uloop COMMAND test_gpio_event_uloop)
     add_test(NAME ui_controller COMMAND test_ui_controller)
     add_test(NAME ui_refresh_policy COMMAND test_ui_refresh_policy)
+    add_test(NAME ubus_async_uloop COMMAND test_ubus_async_uloop)
 
     message(STATUS "Tests configured successfully")
 endif()

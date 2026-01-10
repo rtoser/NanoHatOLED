@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "sys_status.h"
+#include "hal/ubus_hal.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,6 +13,9 @@
 #include <ifaddrs.h>
 #include <arpa/inet.h>
 #include <net/if.h>
+
+/* Request ID counter for matching responses */
+static uint32_t g_next_request_id = 1;
 
 struct sys_status_ctx {
     /* For CPU usage calculation */
@@ -339,4 +343,115 @@ void sys_status_format_speed_bps(uint64_t bytes_per_sec, char *buf, size_t bufle
     } else {
         snprintf(buf, buflen, "%lub/s", (unsigned long)bits_per_sec);
     }
+}
+
+/*
+ * Callback context for service query
+ */
+typedef struct {
+    sys_status_t *status;
+    uint32_t request_id;
+} query_ctx_t;
+
+/*
+ * Callback invoked when ubus query completes
+ */
+static void service_query_cb(const char *service, bool installed,
+                              bool running, int status_code, void *priv) {
+    query_ctx_t *qctx = (query_ctx_t *)priv;
+    if (!qctx || !qctx->status) {
+        free(qctx);
+        return;
+    }
+
+    sys_status_t *status = qctx->status;
+    uint64_t now_ms = get_time_ms();
+
+    /* Find matching service */
+    for (size_t i = 0; i < status->service_count; i++) {
+        if (strcmp(status->services[i].name, service) != 0) continue;
+
+        /* Check request ID to avoid stale response overwriting newer state */
+        if (status->services[i].request_id != qctx->request_id) {
+            /* Stale response - ignore */
+            break;
+        }
+
+        /* Update service status */
+        status->services[i].query_pending = false;
+        status->services[i].last_update_ms = now_ms;
+
+        if (status_code == UBUS_HAL_STATUS_OK) {
+            status->services[i].installed = installed;
+            status->services[i].running = running;
+            status->services[i].status_valid = true;
+        } else {
+            /* Query failed - mark invalid but keep last known state */
+            status->services[i].status_valid = false;
+        }
+        break;
+    }
+
+    free(qctx);
+}
+
+int sys_status_query_services(sys_status_ctx_t *ctx, sys_status_t *status) {
+    (void)ctx;  /* Not used currently */
+
+    if (!status || !ubus_hal) return 0;
+
+    uint64_t now_ms = get_time_ms();
+    int queries_sent = 0;
+
+    for (size_t i = 0; i < status->service_count; i++) {
+        service_status_t *svc = &status->services[i];
+
+        /* Skip if query already pending */
+        if (svc->query_pending) continue;
+
+        /* Skip if recently updated */
+        if (svc->last_update_ms > 0 &&
+            (now_ms - svc->last_update_ms) < SERVICE_REFRESH_INTERVAL_MS) {
+            continue;
+        }
+
+        /* Allocate callback context */
+        query_ctx_t *qctx = malloc(sizeof(query_ctx_t));
+        if (!qctx) continue;
+
+        /* Assign new request ID */
+        uint32_t req_id = g_next_request_id++;
+        if (g_next_request_id == 0) g_next_request_id = 1;  /* Avoid 0 */
+
+        qctx->status = status;
+        qctx->request_id = req_id;
+
+        /* Mark as pending */
+        svc->query_pending = true;
+        svc->request_id = req_id;
+        svc->request_time_ms = now_ms;
+
+        /* Initiate async query */
+        int ret = ubus_hal->query_service_async(svc->name, service_query_cb, qctx);
+        if (ret < 0) {
+            /* Immediate failure */
+            svc->query_pending = false;
+            free(qctx);
+        } else {
+            queries_sent++;
+        }
+    }
+
+    return queries_sent;
+}
+
+bool sys_status_has_pending_queries(const sys_status_t *status) {
+    if (!status) return false;
+
+    for (size_t i = 0; i < status->service_count; i++) {
+        if (status->services[i].query_pending) {
+            return true;
+        }
+    }
+    return false;
 }

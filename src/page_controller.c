@@ -1,4 +1,5 @@
 #include "page_controller.h"
+#include "ui_draw.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -256,7 +257,7 @@ static void render_title_bar(page_controller_t *pc, u8g2_t *u8g2,
 
     /* Draw title */
     u8g2_SetFont(u8g2, font_title);
-    u8g2_DrawStr(u8g2, title_x, TITLE_Y, title);
+    ui_draw_str(u8g2, title_x, TITLE_Y, title);
 
     /* Draw page indicator (only in view mode) */
     if (pc->page_mode == PAGE_MODE_VIEW && pc->anim.type != ANIM_ENTER_MODE) {
@@ -264,17 +265,17 @@ static void render_title_bar(page_controller_t *pc, u8g2_t *u8g2,
         snprintf(page_ind, sizeof(page_ind), "%d/%d", pc->current_page + 1, pc->page_count);
         u8g2_SetFont(u8g2, font_small);
         int ind_width = u8g2_GetStrWidth(u8g2, page_ind);
-        u8g2_DrawStr(u8g2, PAGE_IND_X - ind_width + x_offset, PAGE_IND_Y, page_ind);
+        ui_draw_str(u8g2, PAGE_IND_X - ind_width + x_offset, PAGE_IND_Y, page_ind);
 
         /* Draw enter indicator if page supports it */
         if (page->can_enter) {
             u8g2_SetFont(u8g2, font_symbols);
-            u8g2_DrawUTF8(u8g2, ENTER_IND_X + x_offset, PAGE_IND_Y, "\xE2\x8F\x8E");
+            ui_draw_utf8(u8g2, ENTER_IND_X + x_offset, PAGE_IND_Y, "\xE2\x8F\x8E");
         }
     }
 
     /* Draw title bar separator line */
-    u8g2_DrawHLine(u8g2, x_offset, TITLE_LINE_Y, SCREEN_WIDTH);
+    ui_draw_hline(u8g2, x_offset, TITLE_LINE_Y, SCREEN_WIDTH);
 }
 
 static void render_page_content(page_controller_t *pc, u8g2_t *u8g2,
@@ -286,10 +287,10 @@ static void render_page_content(page_controller_t *pc, u8g2_t *u8g2,
     if (!page || !page->render) return;
 
     /* Set clip window for content area with offset */
-    u8g2_SetClipWindow(u8g2, x_offset, CONTENT_Y_START,
-                       x_offset + SCREEN_WIDTH, SCREEN_HEIGHT);
+    u8g2_SetClipWindow(u8g2, 0, CONTENT_Y_START,
+                       SCREEN_WIDTH, SCREEN_HEIGHT);
 
-    page->render(u8g2, status, pc->page_mode, now_ms);
+    page->render(u8g2, status, pc->page_mode, now_ms, x_offset);
 
     u8g2_SetMaxClipWindow(u8g2);
 }

@@ -155,27 +155,61 @@
 
 ## Phase 4 ubus 异步接入（单线程）
 
-**状态**：待开始
+**状态**：🚧 进行中
 
 **任务**
-- 接入 `ubus_invoke_async` + 回调
-- 服务配置与 `sys_status` 迁移
-- uloop 内统一异步生命周期管理
+- [x] 设计 ubus HAL 异步接口（精简版）
+- [x] 实现 `ubus_hal_mock.c`（uloop_timeout 模拟延迟）
+- [x] 实现 `ubus_hal_real.c`（ubus_invoke_async + ubus_add_uloop）
+- [x] 集成 `sys_status.c` 异步查询（callback + request_id）
+- [x] 更新 `page_services.c` UI（pending="...", timeout="--"）
+- [x] 创建 `test_ubus_async_uloop.c` 单元测试
+- [x] 请求超时保护（uloop_timeout 3秒）
+- [x] 懒重连机制（rpcd 重启自动恢复）
+- [x] Docker 构建验证
+- [ ] Target 硬件验证
+
+**设计决策**
+- HAL 接口精简：`init()` + `cleanup()` + `query_service_async()`
+- 请求超时：`uloop_timeout` 实现（libubus async API 无内置超时）
+- 懒重连：错误时重置 `g_rc_id`，下次请求自动重新 lookup
+- 每个 service 保存 `request_id` 防止旧响应覆盖新状态
+- 回调状态码复用 libubus UBUS_STATUS_* 定义
+
+**超时与重连机制**
+```
+请求发起 → 启动 uloop_timeout(3s)
+    ↓
+正常完成 → complete_cb → 取消 timeout → 更新状态
+    or
+超时触发 → timeout_cb → abort 请求 → 回调 TIMEOUT
+    or
+rpcd 重启 → complete_cb 收到 NOT_FOUND → 重置 rc_id → 下次自动重连
+```
+
+**实际产出**
+- `src/hal/ubus_hal.h` - 异步接口定义
+- `src/hal/ubus_hal_mock.c` - mock 实现（超时保护 + HANG 模式）
+- `src/hal/ubus_hal_real.c` - real 实现（超时保护 + 懒重连）
+- `src/sys_status.c` - 集成 `sys_status_query_services()` + callback
+- `src/sys_status.h` - 新增查询 API
+- `src/pages/page_services.c` - UI 状态显示更新
+- `tests/test_ubus_async_uloop.c` - 异步查询单元测试
+- `tests/CMakeLists.txt` - 新增测试配置 + ui_draw.c
+- `tests/target/run_unit_ssh.sh` - 添加 test_ubus_async_uloop 到目标测试列表
+- `src/CMakeLists.txt` - 添加 ubus HAL + libubus 链接
+
+**Mock 测试 API**
+```c
+void ubus_mock_set_response(const char *service, int status,
+                            bool installed, bool running, int delay_ms);
+void ubus_mock_set_timeout(int timeout_ms);  /* 配置超时阈值 */
+#define MOCK_DELAY_HANG (-1)  /* 永不响应，触发超时 */
+```
 
 **测试**
-- `test_ubus_async_uloop`（mock）
-- `test_ubus_hw`（Target 验证）
-
-**预计改动文件（核心）**
-- `src/hal/ubus_hal.h`
-- `src/hal/ubus_hal_real.c`
-- `src/hal/ubus_hal_mock.c`
-- `src/sys_status.c`
-- `src/service_config.c`
-
-**预计改动文件（测试）**
-- `tests/test_ubus_async_uloop.c`
-- `tests/target/test_ubus_hw.c`
+- `test_ubus_async_uloop`（mock 异步查询、HANG 模式超时触发、并发）
+- Target 验证：`tests/target/run_unit_ssh.sh`
 
 ## Phase 5 集成调优
 

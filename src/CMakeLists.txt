@@ -81,6 +81,7 @@ set(APP_SOURCES
     ui_controller.c
     page_controller.c
     anim.c
+    ui_draw.c
     sys_status.c
     service_config.c
     pages/page_home.c
@@ -90,23 +91,25 @@ set(APP_SOURCES
     hal/time_hal_real.c
 )
 
-# GPIO + display HAL selection
+# GPIO + display + ubus HAL selection
 set(U8G2_SOURCES "")
 if(BUILD_MODE STREQUAL "HOST")
     list(APPEND APP_SOURCES
         hal/gpio_hal_mock.c
         hal/display_hal_null.c
         hal/u8g2_stub.c
+        hal/ubus_hal_mock.c
     )
-    message(STATUS "Using GPIO mock + null display (HOST mode)")
+    message(STATUS "Using mock HALs (HOST mode)")
 else()
     list(APPEND APP_SOURCES
         hal/gpio_hal_libgpiod.c
         hal/display_hal_ssd1306.c
+        hal/ubus_hal_real.c
         fonts.c
     )
     list(APPEND U8G2_SOURCES ${U8G2_CORE} ${U8X8_CORE} ${U8X8_DRIVER})
-    message(STATUS "Using GPIO libgpiod + SSD1306 display (TARGET mode)")
+    message(STATUS "Using real HALs (TARGET mode)")
 endif()
 
 # GPIO debug logging
@@ -133,9 +136,9 @@ target_link_directories(nanohat-oled PRIVATE
 # Link libraries
 set(LINK_LIBS ubox pthread)
 
-# Add libgpiod for TARGET mode
+# Add target-specific libraries
 if(NOT BUILD_MODE STREQUAL "HOST")
-    list(APPEND LINK_LIBS gpiod)
+    list(APPEND LINK_LIBS gpiod ubus)
 endif()
 
 target_link_libraries(nanohat-oled ${LINK_LIBS})

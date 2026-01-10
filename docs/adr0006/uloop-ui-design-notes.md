@@ -375,7 +375,115 @@ void ui_handle_button(const gpio_event_t *event) {
 
 ---
 
-## 5. 参考资料
+## 5. ubus 异步查询模式
+
+### 5.1 libubus 异步 API
+
+libubus 提供两种调用方式：
+
+| API | 特点 |
+|-----|------|
+| `ubus_invoke()` | 同步阻塞，带 timeout 参数 |
+| `ubus_invoke_async()` | 异步非阻塞，无内置 timeout |
+
+```c
+// 同步（会阻塞 uloop）
+int ubus_invoke(ctx, obj_id, "method", msg, cb, priv, timeout_ms);
+
+// 异步（推荐用于 uloop 集成）
+int ubus_invoke_async(ctx, obj_id, "method", msg, &req);
+req.data_cb = data_callback;
+req.complete_cb = complete_callback;
+ubus_complete_request_async(ctx, &req);
+```
+
+### 5.2 超时保护机制
+
+由于 `ubus_invoke_async` 无内置超时，需自行实现：
+
+```c
+typedef struct {
+    struct ubus_request req;
+    struct uloop_timeout timeout;  // 超时定时器
+    bool completed;                // 防止重复回调
+    // ...
+} pending_request_t;
+
+// 发起请求时启动超时
+ubus_invoke_async(ctx, obj_id, "list", msg, &preq->req);
+ubus_complete_request_async(ctx, &preq->req);
+uloop_timeout_set(&preq->timeout, 3000);  // 3秒超时
+
+// 超时回调
+void timeout_cb(struct uloop_timeout *t) {
+    pending_request_t *preq = container_of(t, ...);
+    if (preq->completed) return;
+
+    ubus_abort_request(ctx, &preq->req);  // 取消请求
+    preq->cb(service, false, false, TIMEOUT, priv);
+}
+
+// 正常完成回调
+void complete_cb(struct ubus_request *req, int ret) {
+    pending_request_t *preq = container_of(req, ...);
+    if (preq->completed) return;
+
+    preq->completed = true;
+    uloop_timeout_cancel(&preq->timeout);  // 取消超时
+    preq->cb(service, installed, running, ret, priv);
+}
+```
+
+### 5.3 懒重连机制（rpcd 重启场景）
+
+rpcd 重启后 `rc` 对象 ID 失效，需要重新 lookup：
+
+```
+请求发起 → ensure_rc_id() → 使用缓存的 g_rc_id
+    ↓
+rpcd 重启
+    ↓
+complete_cb 收到 NOT_FOUND/CONN_FAILED
+    ↓
+重置 g_rc_id = 0
+    ↓
+下次请求 → ensure_rc_id() → 重新 ubus_lookup_id("rc")
+```
+
+**错误处理映射**：
+
+| ubus 状态 | 动作 |
+|-----------|------|
+| `UBUS_STATUS_OK` | 正常返回，重置失败计数 |
+| `UBUS_STATUS_NOT_FOUND` | 重置 `rc_id`（rpcd 可能重启） |
+| `UBUS_STATUS_CONNECTION_FAILED` | 重置 `rc_id` + 增加失败计数 |
+| `UBUS_STATUS_INVALID_ARGUMENT` | 重置 `rc_id` |
+
+### 5.4 请求生命周期
+
+```
+alloc_request() ─────────────────────────────────────┐
+    ↓                                                │
+ubus_invoke_async()                                  │
+    ↓                                                │
+uloop_timeout_set(3s) ──► [超时路径]                  │
+    ↓                         ↓                      │
+complete_cb()            timeout_cb()                │
+    ↓                         ↓                      │
+uloop_timeout_cancel()   ubus_abort_request()        │
+    ↓                         ↓                      │
+user_callback()          user_callback(TIMEOUT)      │
+    ↓                         ↓                      │
+release_request() ◄──────────┴───────────────────────┘
+```
+
+**关键保护**：
+- `completed` 标志防止 timeout_cb 和 complete_cb 重复触发
+- `request_id` 防止旧响应覆盖新状态
+
+---
+
+## 6. 参考资料
 
 - [libubox 源码](https://git.openwrt.org/project/libubox.git)
 - [epoll(7) man page](https://man7.org/linux/man-pages/man7/epoll.7.html)

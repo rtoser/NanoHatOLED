@@ -2,7 +2,7 @@
  * System status module for NanoHat OLED
  *
  * Provides local system info from /proc (Phase 3).
- * Service status fields are reserved for Phase 4 ubus integration.
+ * Service status queries via async ubus (Phase 4).
  */
 #ifndef SYS_STATUS_H
 #define SYS_STATUS_H
@@ -16,15 +16,18 @@
 #define HOSTNAME_MAX_LEN 32
 #define IP_ADDR_MAX_LEN  16
 
+/* Service query refresh interval (ms) */
+#define SERVICE_REFRESH_INTERVAL_MS 5000
+
 typedef struct {
     char name[SERVICE_NAME_MAX_LEN];
     bool installed;
     bool running;
-    bool query_pending;      /* Reserved for Phase 4 */
-    bool status_valid;       /* Reserved for Phase 4 */
-    uint32_t request_id;     /* Reserved for Phase 4 */
-    uint64_t request_time_ms; /* Reserved for Phase 4 */
-    uint64_t last_update_ms;  /* Reserved for Phase 4 */
+    bool query_pending;      /* Query in flight */
+    bool status_valid;       /* Last query succeeded */
+    uint32_t request_id;     /* For matching responses */
+    uint64_t request_time_ms; /* When query was sent */
+    uint64_t last_update_ms;  /* When status was last updated */
 } service_status_t;
 
 typedef struct sys_status {
@@ -81,5 +84,20 @@ void sys_status_format_bytes(uint64_t bytes, char *buf, size_t buflen);
  * Utility: format speed (bytes/sec) as "X.XMb/s", "X.XKb/s", etc.
  */
 void sys_status_format_speed_bps(uint64_t bytes_per_sec, char *buf, size_t buflen);
+
+/*
+ * Initiate async queries for all configured services.
+ * Queries are only sent if:
+ *   - No query is pending for the service, AND
+ *   - Last update was more than SERVICE_REFRESH_INTERVAL_MS ago
+ *
+ * Returns number of queries initiated.
+ */
+int sys_status_query_services(sys_status_ctx_t *ctx, sys_status_t *status);
+
+/*
+ * Check if any service queries are pending.
+ */
+bool sys_status_has_pending_queries(const sys_status_t *status);
 
 #endif

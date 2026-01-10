@@ -10,7 +10,7 @@
 #include "page_controller.h"
 #include "sys_status.h"
 
-#define UI_TICK_ANIM_MS    50
+#define UI_TICK_ANIM_MS    20
 #define UI_TICK_STATIC_MS  1000
 #define UI_TICK_IDLE_MS    0
 #define UI_AUTO_SLEEP_MS   30000
