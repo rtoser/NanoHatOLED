@@ -13,7 +13,7 @@
 #define SERVICE_NAME_MAX_LEN   32
 
 #ifndef MONITORED_SERVICES
-#define MONITORED_SERVICES "dropbear,uhttpd"
+#define MONITORED_SERVICES "xray_core,collectd,luci_statistics,dropbear,uhttpd"
 #endif
 
 typedef struct {

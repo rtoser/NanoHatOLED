@@ -186,6 +186,17 @@ static void ssd1306_clear_buffer(void) {
     }
 }
 
+static void ssd1306_set_contrast(uint8_t level) {
+    if (!g_initialized) {
+        return;
+    }
+    /* Map 1-10 to 0-255 contrast range */
+    if (level < 1) level = 1;
+    if (level > 10) level = 10;
+    uint8_t contrast = (uint8_t)((level - 1) * 255 / 9);
+    u8g2_SetContrast(&g_u8g2, contrast);
+}
+
 static const display_hal_ops_t ssd1306_ops = {
     .init = ssd1306_init,
     .cleanup = ssd1306_cleanup,
@@ -193,6 +204,7 @@ static const display_hal_ops_t ssd1306_ops = {
     .set_power = ssd1306_set_power,
     .send_buffer = ssd1306_send_buffer,
     .clear_buffer = ssd1306_clear_buffer,
+    .set_contrast = ssd1306_set_contrast,
 };
 
 const display_hal_ops_t *display_hal = &ssd1306_ops;

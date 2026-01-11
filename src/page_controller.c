@@ -12,8 +12,11 @@
 /* Auto screen-off enable flag (can be changed at runtime) */
 static bool g_auto_screen_off_enabled = false;  /* Disabled for testing */
 
-/* Default enter mode timeout: 60 seconds */
-#define DEFAULT_ENTER_MODE_TIMEOUT_MS 60000
+/* Default enter mode timeout: 30 seconds */
+#define DEFAULT_ENTER_MODE_TIMEOUT_MS 30000
+
+/* Can-enter indicator (down arrow after title) */
+#define CAN_ENTER_ARROW " \xE2\x86\x93"  /* ↓ with leading space */
 
 /* Font sizes (u8g2 font height references) */
 #define FONT_TITLE_HEIGHT 12
@@ -285,6 +288,14 @@ static void render_title_bar(page_controller_t *pc, u8g2_t *u8g2,
     u8g2_SetFont(u8g2, font_title);
     ui_draw_str(u8g2, title_x, TITLE_Y, title);
 
+    /* Draw can-enter arrow after title (only in view mode) */
+    if (pc->page_mode == PAGE_MODE_VIEW && page->can_enter &&
+        pc->anim.type != ANIM_ENTER_MODE) {
+        int title_width = u8g2_GetStrWidth(u8g2, title);
+        u8g2_SetFont(u8g2, font_symbols);
+        ui_draw_utf8(u8g2, title_x + title_width, TITLE_Y, CAN_ENTER_ARROW);
+    }
+
     /* Draw page indicator (only in view mode) */
     if (pc->page_mode == PAGE_MODE_VIEW && pc->anim.type != ANIM_ENTER_MODE) {
         char page_ind[32];
@@ -292,16 +303,46 @@ static void render_title_bar(page_controller_t *pc, u8g2_t *u8g2,
         u8g2_SetFont(u8g2, font_small);
         int ind_width = u8g2_GetStrWidth(u8g2, page_ind);
         ui_draw_str(u8g2, PAGE_IND_X - ind_width + x_offset, PAGE_IND_Y, page_ind);
-
-        /* Draw enter indicator if page supports it */
-        if (page->can_enter) {
-            u8g2_SetFont(u8g2, font_symbols);
-            ui_draw_utf8(u8g2, ENTER_IND_X + x_offset, PAGE_IND_Y, "\xE2\x8F\x8E");
+    } else if (pc->page_mode == PAGE_MODE_ENTER && pc->anim.type != ANIM_EXIT_MODE) {
+        /* Draw selection indicator in enter mode (e.g., "2/5") */
+        if (page->get_selected_index && page->get_item_count) {
+            int selected = page->get_selected_index();
+            int count = page->get_item_count();
+            if (selected >= 0 && count > 0) {
+                char sel_ind[16];
+                snprintf(sel_ind, sizeof(sel_ind), "%d/%d", selected + 1, count);
+                u8g2_SetFont(u8g2, font_small);
+                int ind_width = u8g2_GetStrWidth(u8g2, sel_ind);
+                ui_draw_str(u8g2, PAGE_IND_X - ind_width + x_offset, PAGE_IND_Y, sel_ind);
+            }
         }
     }
 
-    /* Draw title bar separator line */
-    ui_draw_hline(u8g2, x_offset, TITLE_LINE_Y, SCREEN_WIDTH);
+    /* Draw title bar separator line as countdown progress bar */
+    uint32_t timeout_ms = 0;
+    uint64_t elapsed_ms = 0;
+
+    if (pc->page_mode == PAGE_MODE_ENTER && pc->enter_mode_timeout_ms > 0) {
+        /* Enter mode timeout takes priority */
+        timeout_ms = pc->enter_mode_timeout_ms;
+        elapsed_ms = now_ms - pc->enter_mode_start_ms;
+    } else if (g_auto_screen_off_enabled && pc->idle_timeout_ms > 0) {
+        /* Auto screen-off countdown */
+        timeout_ms = pc->idle_timeout_ms;
+        elapsed_ms = now_ms - pc->last_activity_ms;
+    }
+
+    if (timeout_ms > 0 && elapsed_ms < timeout_ms) {
+        /* Calculate progress bar length (full to empty, left to right shrinking) */
+        int full_width = SCREEN_WIDTH;
+        int remain_width = (int)(full_width * (timeout_ms - elapsed_ms) / timeout_ms);
+        if (remain_width > 0) {
+            ui_draw_hline(u8g2, x_offset, TITLE_LINE_Y, remain_width);
+        }
+    } else if (timeout_ms == 0) {
+        /* No timeout active, draw full line */
+        ui_draw_hline(u8g2, x_offset, TITLE_LINE_Y, SCREEN_WIDTH);
+    }
 }
 
 static void render_page_content(page_controller_t *pc, u8g2_t *u8g2,

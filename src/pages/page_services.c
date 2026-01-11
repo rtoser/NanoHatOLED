@@ -207,6 +207,9 @@ static void services_render(u8g2_t *u8g2, const sys_status_t *status,
             state.ui_states[i] = SVC_UI_RUNNING;
         } else if (state.ui_states[i] == SVC_UI_STOPPING && !status->services[i].running) {
             state.ui_states[i] = SVC_UI_STOPPED;
+        } else if (state.ui_states[i] == SVC_UI_ERROR && status->services[i].status_valid) {
+            /* Clear ERROR state when query succeeds */
+            state.ui_states[i] = status->services[i].running ? SVC_UI_RUNNING : SVC_UI_STOPPED;
         }
     }
 
@@ -219,21 +222,6 @@ static void services_render(u8g2_t *u8g2, const sys_status_t *status,
         int is_selected = (svc_idx == state.selected_index);
 
         render_service_line(u8g2, y_positions[i], svc->name, icon, is_selected, mode, x_offset);
-    }
-
-    /* Draw scroll indicators if needed */
-    if (mode == PAGE_MODE_ENTER && service_count > VISIBLE_LINES) {
-        u8g2_SetFont(u8g2, font_symbols);
-
-        if (state.scroll_offset > 0) {
-            /* Up arrow in title bar area */
-            ui_draw_utf8(u8g2, x_offset + SCREEN_WIDTH - 10, 12, "\xE2\x96\xB2");
-        }
-
-        if (state.scroll_offset + VISIBLE_LINES < service_count) {
-            /* Down arrow at bottom */
-            ui_draw_utf8(u8g2, x_offset + SCREEN_WIDTH - 10, SCREEN_HEIGHT - 2, "\xE2\x96\xBC");
-        }
     }
 
     /* Render dialog overlay if active */
@@ -382,6 +370,15 @@ void page_services_notify_control_result(int index, bool success) {
     }
 }
 
+static int services_get_selected_index(void) {
+    return state.selected_index;
+}
+
+static int services_get_item_count(void) {
+    const service_config_t *cfg = service_config_get();
+    return cfg ? (int)cfg->count : 0;
+}
+
 const page_t page_services = {
     .name = "Services",
     .can_enter = true,
@@ -392,4 +389,6 @@ const page_t page_services = {
     .on_key = services_on_key,
     .on_enter = services_on_enter,
     .on_exit = services_on_exit,
+    .get_selected_index = services_get_selected_index,
+    .get_item_count = services_get_item_count,
 };

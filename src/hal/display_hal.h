@@ -59,6 +59,12 @@ typedef struct {
      * Called before rendering new frame.
      */
     void (*clear_buffer)(void);
+
+    /*
+     * Set display contrast/brightness.
+     * level: 1-10 (1=dimmest, 10=brightest)
+     */
+    void (*set_contrast)(uint8_t level);
 } display_hal_ops_t;
 
 /*

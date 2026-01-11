@@ -43,6 +43,10 @@ typedef struct page {
     /* Mode switch callbacks */
     void (*on_enter)(void);
     void (*on_exit)(void);
+
+    /* Optional: Selection info for enter mode indicator (e.g., "2/5") */
+    int (*get_selected_index)(void);  /* Returns 0-based index, or -1 if N/A */
+    int (*get_item_count)(void);      /* Returns total items, or 0 if N/A */
 } page_t;
 
 /* Button key codes */

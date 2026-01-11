@@ -47,6 +47,11 @@ static void null_clear_buffer(void) {
     /* No-op for null driver */
 }
 
+static void null_set_contrast(uint8_t level) {
+    (void)level;
+    /* No-op for null driver */
+}
+
 static const display_hal_ops_t null_ops = {
     .init = null_init,
     .cleanup = null_cleanup,
@@ -54,6 +59,7 @@ static const display_hal_ops_t null_ops = {
     .set_power = null_set_power,
     .send_buffer = null_send_buffer,
     .clear_buffer = null_clear_buffer,
+    .set_contrast = null_set_contrast,
 };
 
 const display_hal_ops_t *display_hal = &null_ops;

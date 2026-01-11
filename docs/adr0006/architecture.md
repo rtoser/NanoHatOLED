@@ -46,6 +46,22 @@ Keep the hardware abstraction layer to support:
 - Multiple display drivers (SSD1306, future variants)
 - ubus implementation split for target vs host tests
 
+### Display HAL Extended
+
+```c
+typedef struct {
+    int (*init)(void);
+    void (*cleanup)(void);
+    u8g2_t *(*get_u8g2)(void);
+    void (*set_power)(bool on);
+    void (*send_buffer)(void);
+    void (*clear_buffer)(void);
+    void (*set_contrast)(uint8_t level);  /* 1-10 brightness */
+} display_hal_ops_t;
+```
+
+`set_contrast()` maps 1-10 to hardware contrast range (0-255 for SSD1306).
+
 ## Differences vs ADR0005
 
 - No event_queue/task_queue/result_queue

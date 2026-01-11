@@ -88,6 +88,7 @@ set(APP_SOURCES
     pages/page_gateway.c
     pages/page_network.c
     pages/page_services.c
+    pages/page_settings.c
     hal/time_hal_real.c
 )
 
