@@ -16,24 +16,14 @@ static bool g_auto_screen_off_enabled = false;  /* Disabled for testing */
 #define DEFAULT_ENTER_MODE_TIMEOUT_MS 30000
 
 /* Can-enter indicator (down arrow after title) */
-#define CAN_ENTER_ARROW " \xE2\x86\x93"  /* ↓ with leading space */
-
-/* Font sizes (u8g2 font height references) */
-#define FONT_TITLE_HEIGHT 12
-#define FONT_SMALL_HEIGHT 8
+#define CAN_ENTER_ARROW " \xE2\x86\x93"  /* with leading space */
 
 /* Title bar layout */
 #define TITLE_X       2
 #define TITLE_Y       12   /* Baseline for 12px font in 16px title bar */
 #define PAGE_IND_X    126  /* Right-aligned page indicator */
 #define PAGE_IND_Y    12
-#define ENTER_IND_X   108  /* Position for enter indicator */
 #define TITLE_LINE_Y  15   /* Horizontal line under title */
-
-/* Content area */
-#define CONTENT_Y_LINE1 (CONTENT_Y_START + 12)
-#define CONTENT_Y_LINE2 (CONTENT_Y_START + 28)
-#define CONTENT_Y_LINE3 (CONTENT_Y_START + 44)
 
 void page_controller_init(page_controller_t *pc, const page_t **pages, int page_count) {
     if (!pc) return;
@@ -91,11 +81,18 @@ static void switch_page(page_controller_t *pc, int direction, uint64_t now_ms) {
     }
 }
 
+static const page_t *get_current_page(const page_controller_t *pc) {
+    if (!pc || pc->current_page < 0 || pc->current_page >= pc->page_count) {
+        return NULL;
+    }
+    return pc->pages[pc->current_page];
+}
+
 static void exit_enter_mode(page_controller_t *pc, uint64_t now_ms) {
     pc->page_mode = PAGE_MODE_VIEW;
     start_animation(pc, ANIM_EXIT_MODE, now_ms);
 
-    const page_t *page = pc->pages[pc->current_page];
+    const page_t *page = get_current_page(pc);
     if (page && page->on_exit) {
         page->on_exit();
     }
@@ -103,27 +100,25 @@ static void exit_enter_mode(page_controller_t *pc, uint64_t now_ms) {
 
 static bool try_enter_mode(page_controller_t *pc, uint64_t now_ms) {
     if (pc->page_mode == PAGE_MODE_ENTER) {
-        /* Already in enter mode - exit */
         exit_enter_mode(pc, now_ms);
         return true;
     }
 
-    const page_t *page = pc->pages[pc->current_page];
+    const page_t *page = get_current_page(pc);
     if (!page) return false;
 
-    if (page->can_enter) {
-        pc->page_mode = PAGE_MODE_ENTER;
-        pc->enter_mode_start_ms = now_ms;
-        start_animation(pc, ANIM_ENTER_MODE, now_ms);
-        if (page->on_enter) {
-            page->on_enter();
-        }
-        return true;
-    } else {
-        /* Page doesn't support enter - shake title */
+    if (!page->can_enter) {
         start_animation(pc, ANIM_TITLE_SHAKE, now_ms);
         return true;
     }
+
+    pc->page_mode = PAGE_MODE_ENTER;
+    pc->enter_mode_start_ms = now_ms;
+    start_animation(pc, ANIM_ENTER_MODE, now_ms);
+    if (page->on_enter) {
+        page->on_enter();
+    }
+    return true;
 }
 
 bool page_controller_handle_key(page_controller_t *pc, uint8_t key, bool long_press, uint64_t now_ms) {
@@ -138,13 +133,13 @@ bool page_controller_handle_key(page_controller_t *pc, uint8_t key, bool long_pr
         return true;
     }
 
-    /* Don't process keys during animation (except complete it first) */
+    /* Don't process keys during animation */
     if (pc->anim.type != ANIM_NONE && !anim_is_complete(&pc->anim, now_ms)) {
         return false;
     }
     pc->anim.type = ANIM_NONE;
 
-    const page_t *page = pc->pages[pc->current_page];
+    const page_t *page = get_current_page(pc);
 
     /* Handle enter mode */
     if (pc->page_mode == PAGE_MODE_ENTER) {
@@ -189,10 +184,8 @@ bool page_controller_handle_key(page_controller_t *pc, uint8_t key, bool long_pr
         }
 
         /* Let page handle remaining keys */
-        if (page && page->on_key) {
-            if (page->on_key(key, long_press, pc->page_mode)) {
-                return true;
-            }
+        if (page && page->on_key && page->on_key(key, long_press, pc->page_mode)) {
+            return true;
         }
     }
 

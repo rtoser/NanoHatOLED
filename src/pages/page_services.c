@@ -200,16 +200,16 @@ static void services_render(u8g2_t *u8g2, const sys_status_t *status,
 
     /* Cache running state and sync ui_states with actual state */
     for (int i = 0; i < service_count && i < MAX_SERVICES; i++) {
-        state.cached_running[i] = status->services[i].running;
+        bool running = status->services[i].running;
+        state.cached_running[i] = running;
 
-        /* Clear transition state when actual state matches expectation */
-        if (state.ui_states[i] == SVC_UI_STARTING && status->services[i].running) {
-            state.ui_states[i] = SVC_UI_RUNNING;
-        } else if (state.ui_states[i] == SVC_UI_STOPPING && !status->services[i].running) {
-            state.ui_states[i] = SVC_UI_STOPPED;
-        } else if (state.ui_states[i] == SVC_UI_ERROR && status->services[i].status_valid) {
-            /* Clear ERROR state when query succeeds */
-            state.ui_states[i] = status->services[i].running ? SVC_UI_RUNNING : SVC_UI_STOPPED;
+        /* Clear transition/error state when actual state matches expectation */
+        svc_ui_state_t ui_state = state.ui_states[i];
+        bool should_sync = (ui_state == SVC_UI_STARTING && running) ||
+                           (ui_state == SVC_UI_STOPPING && !running) ||
+                           (ui_state == SVC_UI_ERROR && status->services[i].status_valid);
+        if (should_sync) {
+            state.ui_states[i] = running ? SVC_UI_RUNNING : SVC_UI_STOPPED;
         }
     }
 

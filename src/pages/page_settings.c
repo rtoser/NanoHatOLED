@@ -154,7 +154,6 @@ static void settings_on_enter(void) {
 }
 
 static void settings_on_exit(void) {
-    /* Nothing to clean up */
 }
 
 static int settings_get_selected_index(void) {

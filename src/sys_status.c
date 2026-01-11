@@ -198,7 +198,7 @@ static void update_network_stats(sys_status_ctx_t *ctx, sys_status_t *status) {
         FILE *fp_route = fopen("/proc/net/route", "r");
         if (fp_route) {
             char line[256];
-            if (fgets(line, sizeof(line), fp_route)) {} /* skip header */
+            (void)fgets(line, sizeof(line), fp_route);  /* skip header */
             while (fgets(line, sizeof(line), fp_route)) {
                 char iface[16];
                 unsigned int dest, gateway;

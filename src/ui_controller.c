@@ -59,10 +59,7 @@ bool ui_controller_handle_button(ui_controller_t *ui, uint8_t key, bool long_pre
         }
     }
 
-    if (changed && ui->power_on) {
-        ui->needs_render = true;
-    } else if (changed && !ui->power_on) {
-        /* Screen turned off */
+    if (changed) {
         ui->needs_render = true;
     }
 
