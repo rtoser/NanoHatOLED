@@ -15,8 +15,8 @@ static bool g_auto_screen_off_enabled = false;  /* Disabled for testing */
 /* Default enter mode timeout: 30 seconds */
 #define DEFAULT_ENTER_MODE_TIMEOUT_MS 30000
 
-/* Can-enter indicator (down arrow after title) */
-#define CAN_ENTER_ARROW " \xE2\x86\x93"  /* with leading space */
+/* Can-enter indicator (right arrow after title) */
+#define CAN_ENTER_ARROW " \xE2\x86\x92"  /* → with leading space */
 
 /* Title bar layout */
 #define TITLE_X       2
@@ -305,7 +305,7 @@ static void render_title_bar(page_controller_t *pc, u8g2_t *u8g2,
             int selected = page->get_selected_index();
             int count = page->get_item_count();
             if (selected >= 0 && count > 0) {
-                char sel_ind[16];
+                char sel_ind[24];
                 snprintf(sel_ind, sizeof(sel_ind), "%d/%d", selected + 1, count);
                 u8g2_SetFont(u8g2, font_small);
                 int ind_width = u8g2_GetStrWidth(u8g2, sel_ind);
