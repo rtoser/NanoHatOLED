@@ -1,12 +1,39 @@
 # NanoHat OLED 架构设计
 
-> 说明：本文档描述旧架构（ADR0002/ADR0005 之前），当前重构主线为 ADR0006（参见 `docs/adr0006/`）。
+## 当前架构 (ADR0006)
 
-## 概述
+**详细文档：**
+- 📐 [技术架构](adr0006/architecture.md) - 模块职责、HAL 层、数据流
+- 🎨 [UI 设计规范](adr0006/ui-design-spec.md) - 页面布局、交互规范、动画
+
+当前主线采用 **单线程 uloop 事件循环架构**：
+
+- 基于 libubox/uloop，与 OpenWrt 惯例对齐
+- HAL 抽象层支持多硬件后端（显示、GPIO、ubus）
+- 插件式页面架构，易于扩展
+- 异步 ubus 服务查询/控制，无阻塞
+
+```
+src/
+├── main.c              # uloop 入口
+├── ui_controller.c     # UI 总控
+├── page_controller.c   # 页面状态机
+├── sys_status.c        # 系统状态 + 异步服务查询
+├── hal/                # 硬件抽象层
+└── pages/              # 页面实现（home/gateway/network/services/settings）
+```
+
+---
+
+## 旧架构（归档参考）
+
+> ⚠️ 以下内容描述 ADR0005 之前的旧架构，仅供历史参考。
+
+### 概述
 
 NanoHat OLED 是一个轻量级的嵌入式显示应用，专为 NanoPi NEO2 Plus 设计。采用单进程事件驱动架构，通过 GPIO 中断响应按键，定时轮询系统状态，在 128x64 OLED 屏幕上显示多页信息。
 
-## 架构图
+### 架构图（旧）
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -28,7 +55,7 @@ NanoHat OLED 是一个轻量级的嵌入式显示应用，专为 NanoPi NEO2 Plu
     └──────────┘     └──────────┘         └──────────┘
 ```
 
-## 模块说明
+### 模块说明
 
 ### 1. main.c - 主控制器
 
@@ -162,7 +189,7 @@ typedef struct {
 - 显示芯片：SSD1306
 - 分辨率：128x64
 
-## 数据流
+### 数据流
 
 ```
 系统状态采集                    按键输入
@@ -188,7 +215,7 @@ sys_status_update_basic()      gpio_button_wait()
           OLED 显示
 ```
 
-## 设计决策
+### 设计决策
 
 ### 1. 单线程 vs 多线程
 
@@ -227,7 +254,7 @@ sys_status_update_basic()      gpio_button_wait()
 - 不依赖 /proc 扫描
 - 与 OpenWrt 服务管理机制一致
 
-## 资源占用
+### 资源占用
 
 | 指标 | 数值 |
 |------|------|
@@ -236,7 +263,7 @@ sys_status_update_basic()      gpio_button_wait()
 | CPU 占用 | < 1%（空闲时） |
 | I2C 带宽 | ~1KB/s（刷新时） |
 
-## 依赖关系
+### 依赖关系
 
 ```
 main.c
@@ -261,7 +288,7 @@ u8g2_port_linux.c
   └── linux/i2c-dev.h
 ```
 
-## 扩展性
+### 扩展性
 
 ### 添加新页面
 1. 在 `page_t` 枚举中添加新页面
