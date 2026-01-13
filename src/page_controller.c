@@ -202,9 +202,12 @@ bool page_controller_tick(page_controller_t *pc, uint64_t now_ms) {
         pc->last_activity_ms = now_ms;
     }
 
-    /* Check auto screen-off (only if enabled) */
+    /* Check auto screen-off (only if enabled and NOT in enter mode).
+     * In enter mode, the enter_mode_timeout takes priority. */
     if (g_auto_screen_off_enabled &&
-        pc->screen_state == SCREEN_ON && pc->idle_timeout_ms > 0) {
+        pc->screen_state == SCREEN_ON &&
+        pc->page_mode != PAGE_MODE_ENTER &&
+        pc->idle_timeout_ms > 0) {
         if (now_ms - pc->last_activity_ms >= pc->idle_timeout_ms) {
             pc->screen_state = SCREEN_OFF;
             needs_render = true;

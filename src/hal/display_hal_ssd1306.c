@@ -190,11 +190,26 @@ static void ssd1306_set_contrast(uint8_t level) {
     if (!g_initialized) {
         return;
     }
-    /* Map 1-10 to 0-255 contrast range */
     if (level < 1) level = 1;
     if (level > 10) level = 10;
-    uint8_t contrast = (uint8_t)((level - 1) * 255 / 9);
-    u8g2_SetContrast(&g_u8g2, contrast);
+
+    /* Non-linear mapping table for better perceptual brightness control.
+     * Human eye perceives brightness logarithmically, so we use an
+     * exponential curve to make each step feel more uniform. */
+    static const uint8_t contrast_table[10] = {
+        0,    /* 1 - minimum */
+        15,   /* 2 */
+        35,   /* 3 */
+        60,   /* 4 */
+        90,   /* 5 */
+        120,  /* 6 */
+        155,  /* 7 */
+        190,  /* 8 */
+        225,  /* 9 */
+        255   /* 10 - maximum */
+    };
+
+    u8g2_SetContrast(&g_u8g2, contrast_table[level - 1]);
 }
 
 static const display_hal_ops_t ssd1306_ops = {
