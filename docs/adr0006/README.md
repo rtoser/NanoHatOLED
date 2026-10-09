@@ -9,6 +9,7 @@ libubox/uloop architecture.
 - `context-libubox-vs-alternatives.md` (decision context)
 - `implementation-plan.md`
 - `ui-design-spec.md` (interaction specification)
+- `deploy.md` (build, SDK image per OpenWrt release, flashing and deployment)
 
 ## Status
 

@@ -67,11 +67,30 @@ static int test_auto_sleep(void) {
     ui_controller_t ui;
     ui_controller_init(&ui);
 
+    /* Auto screen-off is a runtime toggle (Settings page), off by default. */
+    page_controller_set_auto_screen_off(true);
     page_controller_set_idle_timeout(&ui.page_ctrl, 100);
     ui_controller_handle_button(&ui, KEY_K1, false, 1000);
 
     ui_controller_tick(&ui, 1200);
-    ASSERT_TRUE(!page_controller_is_screen_on(&ui.page_ctrl));
+    bool screen_off = !page_controller_is_screen_on(&ui.page_ctrl);
+    page_controller_set_auto_screen_off(false);
+    ASSERT_TRUE(screen_off);
+
+    ui_controller_cleanup(&ui);
+    return 0;
+}
+
+static int test_auto_sleep_disabled_by_default(void) {
+    ui_controller_t ui;
+    ui_controller_init(&ui);
+
+    ASSERT_TRUE(!page_controller_is_auto_screen_off_enabled());
+    page_controller_set_idle_timeout(&ui.page_ctrl, 100);
+    ui_controller_handle_button(&ui, KEY_K1, false, 1000);
+
+    ui_controller_tick(&ui, 1200);
+    ASSERT_TRUE(page_controller_is_screen_on(&ui.page_ctrl));
 
     ui_controller_cleanup(&ui);
     return 0;
@@ -83,34 +102,29 @@ static int test_page_order_and_wrap(void) {
 
     int page_count = 0;
     const page_t **pages = pages_get_list(&page_count);
-    ASSERT_TRUE(page_count == 4);
+    ASSERT_TRUE(page_count == 5);
+    ASSERT_TRUE(ui.page_ctrl.page_count == page_count);
 
+    /* The controller starts on the Gateway page (index 1). K3 walks forward and wraps. */
+    int start = ui.page_ctrl.current_page;
+    ASSERT_TRUE(start == 1);
+    ASSERT_TRUE(ui.page_ctrl.pages[start] == pages[start]);
     uint64_t t = 1000;
 
-    ASSERT_TRUE(ui.page_ctrl.current_page == 0);
-    ASSERT_TRUE(ui.page_ctrl.pages[0] == pages[0]);
+    for (int step = 1; step <= page_count; step++) {
+        int expected = (start + step) % page_count;
+        ui_controller_handle_button(&ui, KEY_K3, false, t);
+        ui_controller_tick(&ui, t + ANIM_SLIDE_DURATION_MS + 1);
+        ASSERT_TRUE(ui.page_ctrl.current_page == expected);
+        ASSERT_TRUE(ui.page_ctrl.pages[expected] == pages[expected]);
+        t += 500;
+    }
+    ASSERT_TRUE(ui.page_ctrl.current_page == start);
 
-    ui_controller_handle_button(&ui, KEY_K3, false, t);
+    /* K1 walks backward and wraps the other way. */
+    ui_controller_handle_button(&ui, KEY_K1, false, t);
     ui_controller_tick(&ui, t + ANIM_SLIDE_DURATION_MS + 1);
-    ASSERT_TRUE(ui.page_ctrl.current_page == 1);
-    ASSERT_TRUE(ui.page_ctrl.pages[1] == pages[1]);
-
-    t += 500;
-    ui_controller_handle_button(&ui, KEY_K3, false, t);
-    ui_controller_tick(&ui, t + ANIM_SLIDE_DURATION_MS + 1);
-    ASSERT_TRUE(ui.page_ctrl.current_page == 2);
-    ASSERT_TRUE(ui.page_ctrl.pages[2] == pages[2]);
-
-    t += 500;
-    ui_controller_handle_button(&ui, KEY_K3, false, t);
-    ui_controller_tick(&ui, t + ANIM_SLIDE_DURATION_MS + 1);
-    ASSERT_TRUE(ui.page_ctrl.current_page == 3);
-    ASSERT_TRUE(ui.page_ctrl.pages[3] == pages[3]);
-
-    t += 500;
-    ui_controller_handle_button(&ui, KEY_K3, false, t);
-    ui_controller_tick(&ui, t + ANIM_SLIDE_DURATION_MS + 1);
-    ASSERT_TRUE(ui.page_ctrl.current_page == 0);
+    ASSERT_TRUE(ui.page_ctrl.current_page == (start + page_count - 1) % page_count);
 
     ui_controller_cleanup(&ui);
     return 0;
@@ -172,6 +186,7 @@ int main(void) {
     failures += test_any_key_wakes_screen();
     failures += test_k3_starts_animation();
     failures += test_auto_sleep();
+    failures += test_auto_sleep_disabled_by_default();
     failures += test_page_order_and_wrap();
     failures += test_wake_does_not_change_page();
     failures += test_k2_short_turns_off_any_page();

@@ -7,12 +7,14 @@ set(CMAKE_SYSTEM_PROCESSOR aarch64)
 # Cross compiler prefix
 set(CROSS_PREFIX "aarch64-openwrt-linux-musl-")
 
-# Find compiler (try common locations)
+# Find compiler: any SDK toolchain (gcc version differs per OpenWrt release)
+file(GLOB _OPENWRT_TOOLCHAIN_BIN_DIRS
+    /builder/staging_dir/toolchain-*/bin
+    $ENV{STAGING_DIR}/../toolchain-*/bin
+)
 find_program(CMAKE_C_COMPILER
     NAMES ${CROSS_PREFIX}gcc
-    PATHS
-        /builder/staging_dir/toolchain-aarch64_cortex-a53_gcc-13.3.0_musl/bin
-        $ENV{STAGING_DIR}/../toolchain-aarch64_cortex-a53_gcc-13.3.0_musl/bin
+    PATHS ${_OPENWRT_TOOLCHAIN_BIN_DIRS}
     NO_DEFAULT_PATH
 )
 

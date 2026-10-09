@@ -33,6 +33,8 @@ Environment overrides:
 - `TARGET_IP` (default: 192.168.33.254)
 - `TARGET_USER` (default: root)
 - `REMOTE_DIR` (default: /tmp/nanohat-tests)
-- `DOCKER_IMAGE` (default: openwrt-sdk:sunxi-cortexa53-24.10.5)
+- `DOCKER_IMAGE` (default: openwrt-sdk:sunxi-cortexa53-24.10.5; must match the OpenWrt release on the target, e.g. openwrt-sdk:sunxi-cortexa53-25.12.5)
 - `BUILD_DIR` (default: tests/build/target)
 - `SKIP_BUILD` (set to 1 to skip build and only upload/run)
+
+Files are uploaded over plain `ssh ... 'cat > file'` pipes because OpenWrt's dropbear ships no sftp-server (modern `scp` defaults to SFTP).

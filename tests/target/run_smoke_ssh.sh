@@ -3,7 +3,7 @@ set -eu
 
 TARGET_IP=${TARGET_IP:-192.168.33.254}
 TARGET_USER=${TARGET_USER:-root}
-SSH_OPTS=${SSH_OPTS:-"-o BatchMode=yes -o StrictHostKeyChecking=accept-new"}
+SSH_OPTS=${SSH_OPTS:-"-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new"}
 BIN=${BIN:-src/build/target/nanohat-oled}
 REMOTE_BIN=${REMOTE_BIN:-/tmp/nanohat-oled}
 RUN_SECONDS=${RUN_SECONDS:-2}
@@ -14,7 +14,8 @@ if [ ! -f "$BIN" ]; then
 fi
 
 echo "== Uploading $BIN to $TARGET_USER@$TARGET_IP:$REMOTE_BIN =="
-scp $SSH_OPTS "$BIN" "$TARGET_USER@$TARGET_IP:$REMOTE_BIN"
+# ssh pipe instead of scp: OpenWrt's dropbear has no sftp-server.
+ssh $SSH_OPTS "$TARGET_USER@$TARGET_IP" "cat > $REMOTE_BIN" < "$BIN"
 
 echo "== Running smoke test on target =="
 ssh $SSH_OPTS "$TARGET_USER@$TARGET_IP" "

@@ -4,7 +4,7 @@ Single-threaded libubox/uloop implementation.
 
 ## Status
 
-**Phase 1 完成** - uloop 基础骨架 + 构建基线
+**Phase 6 完成** - Home/Gateway/Network/Services/Settings 五页，uloop + ubus 异步查询（见 `docs/adr0006/implementation-plan.md`）
 
 ## Build
 
@@ -16,8 +16,14 @@ docker run --rm --platform linux/amd64 \
     sh build_in_docker.sh
 
 # 输出
-build/target/nanohat-oled  # 83KB ARM64 可执行文件
+build/target/nanohat-oled  # ARM64 (musl) 可执行文件
 ```
+
+SDK 镜像必须与目标板的 OpenWrt 发行版一致（libubox/libubus SONAME 带日期戳）。
+换版本时先 `rm -rf src/build/target`，再用对应镜像（如 `openwrt-sdk:sunxi-cortexa53-25.12.5`）编译。
+板级参数通过 `docker run -e GPIOCHIP_PATH=... -e BTN_OFFSETS=... -e I2C_DEV_PATH=... -e MONITORED_SERVICES=...` 覆盖。
+NanoPi NEO2 + 25.12.x（内核 6.12）按键在 `/dev/gpiochip0`，需 `-e GPIOCHIP_PATH=/dev/gpiochip0`（默认 gpiochip1）。
+完整的烧写/依赖/部署流程见 `docs/adr0006/deploy.md`。
 
 ## Structure
 
@@ -41,4 +47,5 @@ src/
 
 - Architecture: `docs/adr0006/architecture.md`
 - Implementation plan: `docs/adr0006/implementation-plan.md`
+- Build & deploy: `docs/adr0006/deploy.md`
 - Archived ADR0005: `src_adr0005/`

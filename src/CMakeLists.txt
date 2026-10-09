@@ -37,6 +37,12 @@ endif()
 # Target sysroot for cross-compilation
 set(TARGET_DIR "/opt/target" CACHE PATH "Target sysroot directory")
 
+# Board / runtime configuration (baked in at compile time; override with -D<NAME>=...)
+set(GPIOCHIP_PATH "/dev/gpiochip1" CACHE STRING "GPIO chip device that carries the K1/K2/K3 buttons")
+set(BTN_OFFSETS "0,2,3" CACHE STRING "Line offsets of K1,K2,K3 on GPIOCHIP_PATH (comma separated)")
+set(I2C_DEV_PATH "/dev/i2c-0" CACHE STRING "I2C bus device of the SSD1306 OLED")
+set(MONITORED_SERVICES "xray_core,uhttpd,dropbear,collectd" CACHE STRING "Services listed on the Services page (comma separated)")
+
 # u8g2 path (Phase 3: real display driver on TARGET)
 set(U8G2_DIR ${CMAKE_CURRENT_SOURCE_DIR}/u8g2/csrc)
 
@@ -121,6 +127,14 @@ endif()
 # Create executable
 add_executable(nanohat-oled ${APP_SOURCES} ${U8G2_SOURCES})
 
+# Board / runtime configuration -> preprocessor macros (see hal/*.c and service_config.h)
+target_compile_definitions(nanohat-oled PRIVATE
+    GPIOCHIP_PATH="${GPIOCHIP_PATH}"
+    BTN_OFFSETS=${BTN_OFFSETS}
+    I2C_DEV_PATH="${I2C_DEV_PATH}"
+    MONITORED_SERVICES="${MONITORED_SERVICES}"
+)
+
 # Include directories (modern CMake)
 target_include_directories(nanohat-oled PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -148,3 +162,6 @@ target_link_libraries(nanohat-oled ${LINK_LIBS})
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "Build mode: ${BUILD_MODE}")
 message(STATUS "Target sysroot: ${TARGET_DIR}")
+message(STATUS "GPIO chip: ${GPIOCHIP_PATH} offsets ${BTN_OFFSETS}")
+message(STATUS "I2C device: ${I2C_DEV_PATH}")
+message(STATUS "Monitored services: ${MONITORED_SERVICES}")

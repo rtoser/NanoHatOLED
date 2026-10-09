@@ -13,7 +13,7 @@ docker build \
     --platform linux/amd64 \
     --build-arg SDK_IMAGE_TAG="${SDK_TAG}" \
     -t "${IMAGE_NAME}" \
-    -f Dockerfile \
+    -f Dockerfile.official \
     .
 
 echo "Build complete: ${IMAGE_NAME}"

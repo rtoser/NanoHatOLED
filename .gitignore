@@ -9,6 +9,9 @@ src_old/nanohat-oled
 src_old/oled_demo
 src/nanohat-oled
 src/build/
+tests/build/
+.gemini/
+.gemini-clipboard/
 tests/test_runner
 
 # CMake

@@ -11,6 +11,11 @@ if [ -d "/builder/staging_dir" ]; then
     if [ -n "$TOOLCHAIN_DIR" ]; then
         export PATH="$TOOLCHAIN_DIR/bin:$PATH"
     fi
+    # The SDK builds its own host tools (cmake, ninja) while compiling ubus/libgpiod;
+    # newer official SDK images ship no system cmake, so prefer the staging copy.
+    if [ -d "/builder/staging_dir/host/bin" ]; then
+        export PATH="/builder/staging_dir/host/bin:$PATH"
+    fi
 fi
 
 # Auto-detect compiler (OpenWrt SDK or generic musl toolchain)
@@ -46,11 +51,20 @@ if [ -f CMakeLists.txt ]; then
         *)       CMAKE_BUILD_TYPE=RelWithDebInfo ;;
     esac
 
+    # Optional board/runtime overrides passed through the environment
+    # (e.g. docker run -e GPIOCHIP_PATH=/dev/gpiochip0 ...). Unset = CMake defaults.
+    set --
+    [ -n "${GPIOCHIP_PATH:-}" ]      && set -- "$@" "-DGPIOCHIP_PATH=$GPIOCHIP_PATH"
+    [ -n "${BTN_OFFSETS:-}" ]        && set -- "$@" "-DBTN_OFFSETS=$BTN_OFFSETS"
+    [ -n "${I2C_DEV_PATH:-}" ]       && set -- "$@" "-DI2C_DEV_PATH=$I2C_DEV_PATH"
+    [ -n "${MONITORED_SERVICES:-}" ] && set -- "$@" "-DMONITORED_SERVICES=$MONITORED_SERVICES"
+
     # Configure and build
     cmake -S . -B "$BUILD_DIR" \
         -DCMAKE_C_COMPILER="$CC" \
         -DCMAKE_BUILD_TYPE="$CMAKE_BUILD_TYPE" \
-        -DTARGET_DIR="$TARGET_DIR"
+        -DTARGET_DIR="$TARGET_DIR" \
+        "$@"
     cmake --build "$BUILD_DIR" --parallel
 else
     echo "Error: CMakeLists.txt not found"

@@ -47,6 +47,7 @@ else()
         ${SRC_DIR}/pages/page_gateway.c
         ${SRC_DIR}/pages/page_network.c
         ${SRC_DIR}/pages/page_services.c
+        ${SRC_DIR}/pages/page_settings.c
         ${SRC_DIR}/hal/display_hal_null.c
         ${SRC_DIR}/hal/u8g2_stub.c
         ${SRC_DIR}/hal/time_hal_real.c
